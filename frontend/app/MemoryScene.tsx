@@ -9,7 +9,6 @@ import type { Group, Mesh } from "three";
 type MemoryNode = { id: string; label: string; kind: string; x: number; y: number; detail?: string; active?: boolean };
 type MemoryEdge = { source: string; target: string; label: string };
 
-// Distinct Neon Cyberpunk Colors for Every Node Type
 const nodeTypeColors: Record<string, string> = {
   agent: "#00f0ff",   // Cyber Cyan
   person: "#10b981",  // Emerald Green
@@ -51,7 +50,6 @@ export default function MemoryScene({
     safeEdges.filter((edge) => edge.source === node.id || edge.target === node.id).length
   ])), [safeNodes, safeEdges]);
 
-  // Deep Space Particle Grid
   const spaceDots = useMemo(() => {
     const values = new Float32Array(700 * 3);
     for (let i = 0; i < 700; i++) {
@@ -65,38 +63,34 @@ export default function MemoryScene({
   return (
     <Canvas 
       camera={{ position: [0, 0, 9.5], fov: 42 }} 
-      dpr={[1, 2]} 
+      dpr={[1, 1.5]} 
       performance={{ min: 0.6 }} 
-      gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.NoToneMapping }}
+      gl={{ antialias: false, powerPreference: "high-performance" }}
     >
       <color attach="background" args={["#030712"]} />
       <ambientLight intensity={2.0} />
       <pointLight position={[0, 0, 8]} intensity={25} color="#00f0ff" />
       <pointLight position={[-8, -5, -4]} intensity={15} color="#a855f7" />
 
-      {/* Deep Space Background Particles */}
       <points>
         <bufferGeometry><bufferAttribute attach="attributes-position" args={[spaceDots, 3]} /></bufferGeometry>
         <pointsMaterial size={0.042} color="#00f0ff" transparent opacity={0.5} sizeAttenuation blending={THREE.AdditiveBlending} />
       </points>
 
-      {/* Holographic Glowing Beam Connections */}
       {safeEdges.map((edge) => {
         const from = positions.get(edge.source);
         const to = positions.get(edge.target);
         const level = Math.max(1, Math.min(relationshipLevels.get(edge.source) ?? 1, 4));
         const edgeColor = level > 2 ? "#00f0ff" : level > 1 ? "#a855f7" : "#1e293b";
         return from && to ? (
-          <g key={`${edge.source}-${edge.target}`}>
-            {/* Core Laser Line */}
+          <group key={`${edge.source}-${edge.target}`}>
             <Line
               points={[from, to]}
               color={edgeColor}
               transparent
-              opacity={0.7}
+              opacity={0.75}
               lineWidth={level * 1.2}
             />
-            {/* Outer Blurry Laser Glow */}
             <Line
               points={[from, to]}
               color={edgeColor}
@@ -104,11 +98,10 @@ export default function MemoryScene({
               opacity={0.25}
               lineWidth={level * 3.5}
             />
-          </g>
+          </group>
         ) : null;
       })}
 
-      {/* Nodes */}
       {safeNodes.map((node) => (
         <AdvancedNodeVisual
           key={node.id}
@@ -140,12 +133,10 @@ function AdvancedNodeVisual({ node, position, level, active, voiceState, onSelec
     if (!groupRef.current) return;
     const time = clock.getElapsedTime();
 
-    // Multi-axis counter-rotations
     groupRef.current.rotation.y += delta * (isAgent ? 0.35 : 0.12);
     if (ring1Ref.current) ring1Ref.current.rotation.x += delta * (isAgent ? 0.6 : 0.2);
     if (ring2Ref.current) ring2Ref.current.rotation.z -= delta * (isAgent ? 0.8 : 0.3);
 
-    // Pulse effects
     const pulseFreq = voiceState === "speaking" ? 14 : voiceState === "listening" ? 9 : voiceState === "thinking" ? 6 : 2;
     const statePulse = isAgent ? Math.sin(time * pulseFreq) * 0.08 : Math.sin(time * 1.8 + level) * 0.04;
     
@@ -156,25 +147,21 @@ function AdvancedNodeVisual({ node, position, level, active, voiceState, onSelec
 
   return (
     <group ref={groupRef} position={position} onClick={(e) => { e.stopPropagation(); onSelect(node.id); }}>
-      {/* 1. Intense Inner Glowing Plasma Sphere */}
       <mesh>
         <sphereGeometry args={[isAgent ? 0.42 : knowledgeSize, 32, 32]} />
         <meshBasicMaterial color={color} transparent opacity={active ? 0.95 : 0.85} />
       </mesh>
 
-      {/* 2. Additive Halo Light Glow Shell */}
       <mesh scale={1.4}>
         <sphereGeometry args={[isAgent ? 0.45 : knowledgeSize, 24, 24]} />
         <meshBasicMaterial color={color} transparent opacity={0.25} blending={THREE.AdditiveBlending} />
       </mesh>
 
-      {/* 3. Outer Geometric Wireframe Matrix */}
       <mesh ref={ring1Ref}>
         {isAgent ? <icosahedronGeometry args={[0.65, 2]} /> : <octahedronGeometry args={[knowledgeSize * 1.5, 1]} />}
         <meshStandardMaterial color={color} emissive={color} emissiveIntensity={3.5} wireframe transparent opacity={0.6} />
       </mesh>
 
-      {/* 4. Dual Counter-Rotating Orbital Rings */}
       <mesh ref={ring2Ref} rotation={[Math.PI / 3, 0, 0]}>
         <torusGeometry args={[isAgent ? 0.88 : 0.45, 0.015, 16, 64]} />
         <meshBasicMaterial color={color} transparent opacity={active ? 0.9 : 0.6} blending={THREE.AdditiveBlending} />
@@ -184,7 +171,6 @@ function AdvancedNodeVisual({ node, position, level, active, voiceState, onSelec
         <meshBasicMaterial color={color} transparent opacity={active ? 0.6 : 0.3} blending={THREE.AdditiveBlending} />
       </mesh>
 
-      {/* Holographic Text Billboard */}
       <Billboard follow>
         <Text position={[isAgent ? 0.98 : 0.62, 0.24, 0]} fontSize={isAgent ? 0.24 : 0.15} color="#ffffff" anchorX="left" anchorY="middle" outlineWidth={0.018} outlineColor="#020617">
           {node.label}
@@ -194,7 +180,6 @@ function AdvancedNodeVisual({ node, position, level, active, voiceState, onSelec
         </Text>
       </Billboard>
 
-      {/* 3D Spatial HUD Card on Node Select */}
       {active && (
         <Html distanceFactor={10} position={[isAgent ? 1.3 : 0.85, -0.4, 0]}>
           <div style={{
