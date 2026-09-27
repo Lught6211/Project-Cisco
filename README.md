@@ -87,7 +87,7 @@ You do not need to start two terminals manually. From the project root, run:
 
 This opens separate backend and frontend terminals and keeps both services running. On your Wi-Fi network, open `http://192.168.0.7:3000` from another device. Windows Firewall may ask permission for Python and Node; allow private networks. The frontend automatically sends API requests to the same computer’s port `8000`.
 
-When Windows Terminal is available, the launcher opens the backend and frontend in tabs in one terminal window instead of separate PowerShell windows. The CiscoAI interface keeps only circular focus, microphone, and activity controls visible at the right edge; microphone input opens the caption drawer and submits the transcript automatically.
+When Windows Terminal is available, the launcher opens the backend and frontend in tabs in one terminal window instead of separate PowerShell windows. It uses `py.exe` and `npm.cmd` explicitly so the tabs do not depend on an old PATH. The CiscoAI interface keeps only circular focus, microphone, and activity controls visible at the right edge; microphone input opens the caption drawer and submits the transcript automatically.
 
 The development CORS policy allows local-network browser access without credentials. Do not expose this development server directly to the public internet; production deployment should use HTTPS, authentication, and a restricted origin list.
 
