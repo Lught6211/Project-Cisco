@@ -8,6 +8,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from .agent import AgentRuntime
+
 DATA_PATH = Path(__file__).parent.parent / "data" / "memory.json"
 
 
@@ -97,6 +99,7 @@ events = [
     Event(id="evt-3", type="system", title="CISCO online", detail="All local systems nominal", timestamp="5m ago"),
 ]
 calls: list[CallState] = []
+agent = AgentRuntime()
 
 app = FastAPI(title="Project Cisco API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -146,11 +149,12 @@ def simulate_call(payload: CallRequest) -> CallState:
 @app.post("/api/agent/message")
 def send_message(payload: AgentMessage) -> Event:
     global state
+    response, provider = agent.respond(payload.message)
     event = Event(
         id=f"evt-{secrets.token_hex(4)}",
         type="memory",
-        title="Context captured",
-        detail=payload.message,
+        title=f"CISCO replied via {provider}",
+        detail=response,
         timestamp="just now",
     )
     events.insert(0, event)

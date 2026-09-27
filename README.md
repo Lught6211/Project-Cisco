@@ -5,6 +5,7 @@ Project Cisco is a local-first foundation for an autonomous, voice-enabled AI ag
 ## Current slice
 
 - `backend/`: FastAPI service with health, graph, event, agent-message, and simulated outbound-call endpoints.
+- `backend/app/agent.py`: provider-neutral agent runtime with a deterministic local fallback and optional OpenAI-compatible chat completion support.
 - `backend/data/memory.json`: created on first API start and used as the local memory store.
 - `frontend/`: Next.js dashboard with a rendered memory topology, voice-session simulation, telemetry, and directive input.
 - Provider integrations are intentionally isolated for the next milestone. No API keys are required for the local simulation.
@@ -43,12 +44,21 @@ With the backend running, the dashboard voice control creates a local call recor
 Invoke-RestMethod http://localhost:8000/api/calls/simulate -Method Post -ContentType 'application/json' -Body '{"recipient":"Ramen Kaito","purpose":"Confirm Friday reservation"}'
 ```
 
+### Send an agent directive
+
+Without an API key, CISCO responds using the local simulation runtime. To use an OpenAI-compatible provider, set `OPENAI_API_KEY`, and optionally `OPENAI_MODEL` or `OPENAI_BASE_URL`, before starting the backend:
+
+```powershell
+$env:OPENAI_API_KEY = "your-key"
+Invoke-RestMethod http://localhost:8000/api/agent/message -Method Post -ContentType 'application/json' -Body '{"message":"Remember that Maya prefers window tables"}'
+```
+
 ## Next milestones
 
-1. Add an LLM adapter behind the agent message endpoint.
-2. Replace the simulation provider with Twilio webhook and media-stream adapters with signed request validation.
-3. Replace the JSON store with a graph/vector persistence layer and event streaming.
-4. Add authenticated WebSocket updates for graph and call state.
+1. Replace the simulation provider with Twilio webhook and media-stream adapters with signed request validation.
+2. Replace the JSON store with a graph/vector persistence layer and event streaming.
+3. Add authenticated WebSocket updates for graph, agent responses, and call state.
+4. Add a task planner that can turn approved directives into tool calls.
 
 ## Environment
 
