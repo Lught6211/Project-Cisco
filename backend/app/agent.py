@@ -16,12 +16,13 @@ class AgentRuntime:
         self.base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
     def respond(self, message: str) -> tuple[str, str]:
-        if not self.api_key:
+        if not self.api_key and self.base_url == "https://api.openai.com/v1":
             return self._local_response(message), "simulation"
+        provider = "ollama" if "localhost:11434" in self.base_url else "openai-compatible"
         try:
-            return self._provider_response(message), "openai-compatible"
+            return self._provider_response(message), provider
         except (OSError, ValueError, error.URLError, error.HTTPError):
-            return self._local_response(message), "simulation-fallback"
+            return self._local_response(message), f"{provider}-fallback"
 
     def _local_response(self, message: str) -> str:
         normalized = message.lower()
@@ -41,10 +42,10 @@ class AgentRuntime:
             "temperature": 0.2,
         }).encode("utf-8")
         endpoint = f"{self.base_url.rstrip('/')}/chat/completions"
-        req = request.Request(endpoint, data=payload, headers={
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }, method="POST")
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        req = request.Request(endpoint, data=payload, headers=headers, method="POST")
         with request.urlopen(req, timeout=20) as response:
             result = json.loads(response.read().decode("utf-8"))
         content = result["choices"][0]["message"]["content"]

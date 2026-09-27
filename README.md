@@ -45,14 +45,23 @@ With the backend running, the dashboard voice control creates a local call recor
 Invoke-RestMethod http://localhost:8000/api/calls/simulate -Method Post -ContentType 'application/json' -Body '{"recipient":"Ramen Kaito","purpose":"Confirm Friday reservation"}'
 ```
 
-### Send an agent directive
+### Use the free local Ollama agent
 
-Without an API key, CISCO responds using the local simulation runtime. To use an OpenAI-compatible provider, set `OPENAI_API_KEY`, and optionally `OPENAI_MODEL` or `OPENAI_BASE_URL`, before starting the backend:
+Install Ollama from https://ollama.com, then download the recommended local model:
 
 ```powershell
-$env:OPENAI_API_KEY = "your-key"
+ollama pull llama3.2
+```
+
+Copy `backend/.env.example` to `backend/.env`. The included values point CISCO at Ollama, so no paid API key is needed. Start Ollama before the backend.
+
+To send an agent directive:
+
+```powershell
 Invoke-RestMethod http://localhost:8000/api/agent/message -Method Post -ContentType 'application/json' -Body '{"message":"Remember that Maya prefers window tables"}'
 ```
+
+If Ollama is unavailable, CISCO automatically uses the deterministic local simulation response.
 
 ### Connect Twilio webhooks
 
@@ -68,7 +77,7 @@ For realtime audio, set `TWILIO_STREAM_URL` to your public WebSocket URL and con
 
 ## Next milestones
 
-1. Add production reconnect, timeout, and provider health handling around the realtime bridge.
+1. Add local speech recognition and text-to-speech around the Ollama agent.
 2. Replace the JSON store with a graph/vector persistence layer and event streaming.
 3. Add authenticated WebSocket updates for graph, agent responses, and call state.
 4. Add a task planner that can turn approved directives into tool calls.
