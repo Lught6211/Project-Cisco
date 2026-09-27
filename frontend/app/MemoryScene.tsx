@@ -10,12 +10,21 @@ import type { Group } from "three";
 type MemoryNode = { id: string; label: string; kind: string; x: number; y: number; active?: boolean };
 type MemoryEdge = { source: string; target: string; label: string };
 
-const colors: Record<string, string> = { 
-  agent: "#3b82f6",   // Blue for Idle Agent
-  person: "#c6ef78",  // Green
-  place: "#b8a3ff",   // Purple
-  task: "#f2b66d",    // Amber/Yellow
-  memory: "#6e9695"   // Muted Cyan
+// Node Kind Base Colors
+const nodeTypeColors: Record<string, string> = { 
+  agent: "#52e5da",   // Cyan / Blue for CISCO
+  person: "#c6ef78",  // Green for Person (Maya Chen)
+  place: "#b8a3ff",   // Purple for Place (Table 12)
+  task: "#f2b66d",    // Amber for Task (Reservation)
+  memory: "#6e9695"   // Muted Cyan for Memory (Ramen Kaito)
+};
+
+// Reactive State Colors for CISCO Agent
+const stateColors: Record<string, string> = {
+  idle: "#52e5da",      // Cyan / Blue
+  listening: "#f2b66d", // Amber / Yellow
+  thinking: "#b8a3ff",  // Purple
+  speaking: "#c6ef78"   // Green
 };
 
 export default function MemoryScene({ 
@@ -97,16 +106,14 @@ export default function MemoryScene({
 function MemoryNodeVisual({ node, position, level, active, voiceState, onSelect }: { node: MemoryNode; position: [number, number, number]; level: number; active: boolean; voiceState: "idle" | "listening" | "thinking" | "speaking"; onSelect: (id: string) => void }) {
   const groupRef = useRef<Group>(null);
   const isAgent = node.kind === "agent";
-  const relationshipColor = level >= 3 ? "#52e5da" : level === 2 ? "#b8a3ff" : colors[node.kind] ?? colors.memory;
   
-  // Color Mapping: Idle = Blue (#3b82f6), Listening = Yellow (#f2b66d), Thinking = Purple (#b8a3ff), Speaking = Green (#c6ef78)
-  const stateColor = 
-    voiceState === "listening" ? "#f2b66d" : 
-    voiceState === "thinking" ? "#b8a3ff" : 
-    voiceState === "speaking" ? "#c6ef78" : 
-    "#3b82f6"; // Explicit Blue for Idle
-
-  const color = isAgent ? stateColor : relationshipColor;
+  // Use specific node category colors for non-agent nodes
+  const baseColor = nodeTypeColors[node.kind] ?? nodeTypeColors.memory;
+  
+  // Use voice state colors specifically for the Agent (CISCO)
+  const agentStateColor = stateColors[voiceState] ?? nodeTypeColors.agent;
+  
+  const color = isAgent ? agentStateColor : baseColor;
 
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return;
