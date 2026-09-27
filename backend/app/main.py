@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -15,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .agent import AgentRuntime
+from .realtime import RealtimeBridge, provider_audio_loop
 
 DATA_PATH = Path(__file__).parent.parent / "data" / "memory.json"
 JUST_NOW = "just now"
@@ -223,41 +225,82 @@ async def twilio_stream_webhook(request: Request) -> Response:
     return twiml_response(f'<Connect><Stream url="{escape(stream_url)}" /></Connect>')
 
 
+async def start_media_stream(message: dict, realtime: RealtimeBridge, websocket: WebSocket) -> tuple[str, asyncio.Task | None]:
+    start = message.get("start", {})
+    stream_id = start.get("streamSid", secrets.token_hex(4))
+    media_streams[stream_id] = MediaStreamState(
+        stream_id=stream_id,
+        call_id=start.get("callSid", "unknown"),
+        status="connected",
+    )
+    if not realtime.enabled:
+        return stream_id, None
+    try:
+        await realtime.connect()
+        return stream_id, asyncio.create_task(provider_audio_loop(realtime, websocket, stream_id))
+    except (OSError, RuntimeError):
+        events.insert(0, Event(
+            id=f"evt-{secrets.token_hex(4)}",
+            type="system",
+            title="Realtime provider unavailable",
+            detail="Media transport remains in local fallback mode",
+            timestamp=JUST_NOW,
+        ))
+        return stream_id, None
+
+
+async def handle_media_frame(message: dict, stream_id: str, realtime: RealtimeBridge) -> None:
+    if stream_id not in media_streams:
+        return
+    payload = message.get("media", {}).get("payload", "")
+    media_streams[stream_id].media_chunks += 1
+    media_streams[stream_id].audio_bytes += len(payload) * 3 // 4
+    try:
+        await realtime.send_audio(payload)
+    except (OSError, RuntimeError):
+        await realtime.close()
+
+
+def stop_media_stream(stream_id: str) -> None:
+    if stream_id not in media_streams:
+        return
+    media_streams[stream_id].status = "stopped"
+    events.insert(0, Event(
+        id=f"evt-{secrets.token_hex(4)}",
+        type="call",
+        title="Media stream stopped",
+        detail=f"Received {media_streams[stream_id].media_chunks} audio chunks",
+        timestamp=JUST_NOW,
+    ))
+
+
 @app.websocket("/api/telephony/media-stream")
 async def twilio_media_stream(websocket: WebSocket) -> None:
     await websocket.accept()
     stream_id = ""
+    realtime = RealtimeBridge()
+    provider_task: asyncio.Task | None = None
     try:
         while True:
             message = json.loads(await websocket.receive_text())
             event_type = message.get("event")
             if event_type == "start":
-                start = message.get("start", {})
-                stream_id = start.get("streamSid", secrets.token_hex(4))
-                media_streams[stream_id] = MediaStreamState(
-                    stream_id=stream_id,
-                    call_id=start.get("callSid", "unknown"),
-                    status="connected",
-                )
+                stream_id, provider_task = await start_media_stream(message, realtime, websocket)
             elif event_type == "media" and stream_id in media_streams:
-                payload = message.get("media", {}).get("payload", "")
-                media_streams[stream_id].media_chunks += 1
-                media_streams[stream_id].audio_bytes += len(payload) * 3 // 4
+                await handle_media_frame(message, stream_id, realtime)
             elif event_type == "stop" and stream_id in media_streams:
-                media_streams[stream_id].status = "stopped"
-                events.insert(0, Event(
-                    id=f"evt-{secrets.token_hex(4)}",
-                    type="call",
-                    title="Media stream stopped",
-                    detail=f"Received {media_streams[stream_id].media_chunks} audio chunks",
-                    timestamp=JUST_NOW,
-                ))
+                stop_media_stream(stream_id)
                 break
     except WebSocketDisconnect:
         if stream_id in media_streams:
             media_streams[stream_id].status = "stopped"
     except (json.JSONDecodeError, KeyError, TypeError):
         await websocket.close(code=1003, reason="Invalid media stream message")
+    finally:
+        if provider_task is not None:
+            provider_task.cancel()
+            await asyncio.gather(provider_task, return_exceptions=True)
+        await realtime.close()
 
 
 @app.post("/api/telephony/speech", responses={403: {"description": "Invalid Twilio signature"}})

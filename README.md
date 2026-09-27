@@ -6,6 +6,7 @@ Project Cisco is a local-first foundation for an autonomous, voice-enabled AI ag
 
 - `backend/`: FastAPI service with health, graph, event, agent-message, and simulated outbound-call endpoints.
 - `backend/app/agent.py`: provider-neutral agent runtime with a deterministic local fallback and optional OpenAI-compatible chat completion support.
+- `backend/app/realtime.py`: optional realtime audio bridge for Twilio G.711 media and an OpenAI-compatible realtime provider.
 - `backend/data/memory.json`: created on first API start and used as the local memory store.
 - `frontend/`: Next.js dashboard with a rendered memory topology, voice-session simulation, telemetry, and directive input.
 - Provider integrations are intentionally isolated for the next milestone. No API keys are required for the local simulation.
@@ -63,11 +64,11 @@ https://your-public-host.example.com/api/telephony/voice
 
 The voice route starts a speech gather, and `/api/telephony/speech` sends the recognized text through CISCO and returns escaped TwiML. When `TWILIO_AUTH_TOKEN` is set, requests without a valid `X-Twilio-Signature` are rejected with `403`. For local development without credentials, the route accepts unsigned requests so the XML contract can be tested safely.
 
-For a realtime audio transport, set `TWILIO_STREAM_URL` to your public WebSocket URL and configure Twilio to use `/api/telephony/stream`. The WebSocket endpoint `/api/telephony/media-stream` tracks `start`, `media`, and `stop` events and counts received audio frames. It does not yet synthesize audio back to the caller; that is the next realtime model adapter.
+For realtime audio, set `TWILIO_STREAM_URL` to your public WebSocket URL and configure Twilio to use `/api/telephony/stream`. The WebSocket endpoint `/api/telephony/media-stream` tracks `start`, `media`, and `stop` events and counts received audio frames. When `OPENAI_API_KEY` is set, it also bridges Twilio G.711 audio to the OpenAI-compatible realtime provider and sends generated G.711 audio back to Twilio. Without a key, or if the provider disconnects, it remains a local transport simulation and records the fallback in telemetry.
 
 ## Next milestones
 
-1. Connect the media stream to a realtime speech model for bidirectional audio.
+1. Add production reconnect, timeout, and provider health handling around the realtime bridge.
 2. Replace the JSON store with a graph/vector persistence layer and event streaming.
 3. Add authenticated WebSocket updates for graph, agent responses, and call state.
 4. Add a task planner that can turn approved directives into tool calls.
