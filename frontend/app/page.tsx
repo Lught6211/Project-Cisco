@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { Activity, AudioLines, BrainCircuit, CircleDot, Command, Mic, PhoneCall, Radio, Send, ShieldCheck, Signal, Sparkles } from "lucide-react";
-import MemoryScene from "./MemoryScene";
 import "./scene.css";
+
+const MemoryScene = dynamic(() => import("./MemoryScene"), { ssr: false, loading: () => <div className="scene-loading">INITIALIZING 3D MEMORY...</div> });
 
 type Node = { id: string; label: string; kind: string; detail: string; x: number; y: number; active?: boolean };
 type Edge = { source: string; target: string; label: string };

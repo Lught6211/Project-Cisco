@@ -73,6 +73,12 @@ Use the dashboard directive box to ask a question. CISCO runs local-only by defa
 
 The dashboard is responsive and installable as a PWA on desktop and mobile browsers. The memory graph is a Three.js scene: drag to orbit around nodes, pinch or scroll to zoom, and tap a node to focus it. A native packaged mobile app can be added later with the same API, but the current PWA requires no paid hosting or app-store account.
 
+### PC and Android packaging
+
+The current free distribution is a PWA: use the browser menu and choose `Install CISCO` on Windows, Android, or ChromeOS. A Windows `.exe` installer can wrap the dashboard, but Windows `.exe` files cannot run on Android; Android requires the PWA install flow or a separate Capacitor/Android package. Ollama and the local model remain separate device prerequisites because the model is large and should not be silently bundled into an installer.
+
+Three.js is loaded only in the browser, so the server-rendered dashboard remains stable while the 3D scene initializes on the client.
+
 ### Connect Twilio webhooks
 
 Set `TWILIO_AUTH_TOKEN` in the backend environment, then configure the Twilio phone number Voice webhook to point to:
