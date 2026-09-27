@@ -55,6 +55,7 @@ class Event(BaseModel):
 
 class AgentMessage(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
+    use_web: bool = False
 
 
 class AgentAnswer(BaseModel):
@@ -377,10 +378,12 @@ def send_message(payload: AgentMessage) -> Event:
 
 @app.post("/api/agent/ask")
 def ask_agent(payload: AgentMessage) -> AgentAnswer:
-    try:
-        sources = search_web(payload.message)
-    except (OSError, ValueError):
-        sources = []
+    sources = []
+    if payload.use_web:
+        try:
+            sources = search_web(payload.message)
+        except (OSError, ValueError):
+            sources = []
     context = "\n".join(f"- {source.title}: {source.snippet} ({source.url})" for source in sources)
     answer, provider = agent.respond(payload.message, context)
     memory_node_id = remember_research(payload.message, answer, sources)

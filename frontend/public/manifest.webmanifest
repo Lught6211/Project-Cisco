@@ -1,0 +1,11 @@
+{
+  "name": "CISCO Autonomous Intelligence",
+  "short_name": "CISCO",
+  "description": "Local-first autonomous intelligence control surface",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#081011",
+  "theme_color": "#081011",
+  "orientation": "any",
+  "icons": []
+}

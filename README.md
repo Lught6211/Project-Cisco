@@ -10,6 +10,7 @@ Project Cisco is a local-first foundation for an autonomous, voice-enabled AI ag
 - `backend/app/web.py`: free DuckDuckGo HTML search adapter for research context.
 - `backend/data/memory.json`: created on first API start and used as the local memory store.
 - `frontend/`: Next.js dashboard with a rendered memory topology, voice-session simulation, telemetry, and directive input.
+- `frontend/app/MemoryScene.tsx`: orbitable Three.js memory graph with depth, lighting, touch gestures, and selectable nodes.
 - Provider integrations are intentionally isolated for the next milestone. No API keys are required for the local simulation.
 
 ## Run locally
@@ -68,7 +69,9 @@ If Ollama is unavailable, CISCO automatically uses the deterministic local simul
 
 ### Research, memory, and browser speech
 
-Use the dashboard directive box to ask a question. CISCO searches DuckDuckGo, sends the result snippets to Ollama, stores the research topic and up to three sources in the memory graph, and returns the answer. No search API key is required. The `VOICE INPUT` control uses the browser Web Speech API, and answers can be spoken through the browser when voice mode is enabled. Browser speech support varies by browser and may require microphone permission.
+Use the dashboard directive box to ask a question. CISCO runs local-only by default; toggle `WEB RESEARCH ON` when you want free Wikipedia/DuckDuckGo context. It sends selected research to Ollama, stores the topic and up to three sources in the memory graph, and returns the answer. The `VOICE INPUT` control uses the browser Web Speech API, and answers can be spoken through the browser when voice mode is enabled. Browser speech support varies by browser and may require microphone permission.
+
+The dashboard is responsive and installable as a PWA on desktop and mobile browsers. The memory graph is a Three.js scene: drag to orbit around nodes, pinch or scroll to zoom, and tap a node to focus it. A native packaged mobile app can be added later with the same API, but the current PWA requires no paid hosting or app-store account.
 
 ### Connect Twilio webhooks
 

@@ -1,0 +1,5 @@
+.graph-3d-canvas { cursor: grab; }
+.graph-3d-canvas:active { cursor: grabbing; }
+.scene-label { display: grid; gap: 2px; color: var(--ink); text-shadow: 0 1px 8px #081011; font-size: 10px; }
+.scene-label small { color: var(--muted); font: 8px 'DM Mono'; text-transform: uppercase; }
+.selected-toggle { color: var(--cyan) !important; }
