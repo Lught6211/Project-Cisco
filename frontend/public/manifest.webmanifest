@@ -1,6 +1,6 @@
 {
-  "name": "CISCO Autonomous Intelligence",
-  "short_name": "CISCO",
+  "name": "CiscoAI Autonomous Intelligence",
+  "short_name": "CiscoAI",
   "description": "Local-first autonomous intelligence control surface",
   "start_url": "/",
   "display": "standalone",

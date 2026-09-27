@@ -1,6 +1,6 @@
-# Project Cisco
+# CiscoAI
 
-Project Cisco is a local-first foundation for an autonomous, voice-enabled AI agent with persistent memory and a live operational dashboard.
+CiscoAI is a local-first foundation for an autonomous, voice-enabled AI agent with persistent memory and a live operational dashboard.
 
 ## Current slice
 
@@ -71,7 +71,9 @@ If Ollama is unavailable, CISCO automatically uses the deterministic local simul
 
 Use the dashboard directive box to ask a question. CISCO runs local-only by default; toggle `WEB RESEARCH ON` when you want free Wikipedia/DuckDuckGo context. It sends selected research to Ollama, stores the topic and up to three sources in the memory graph, and returns the answer. The `VOICE INPUT` control uses the browser Web Speech API, and answers can be spoken through the browser when voice mode is enabled. Browser speech support varies by browser and may require microphone permission.
 
-The dashboard is responsive and installable as a PWA on desktop and mobile browsers. The memory graph is a Three.js scene: drag to orbit around nodes, pinch or scroll to zoom, and tap a node to focus it. A native packaged mobile app can be added later with the same API, but the current PWA requires no paid hosting or app-store account.
+The dashboard is responsive and installable as a CiscoAI PWA on desktop and mobile browsers. The memory graph is a Three.js scene with JARVIS-style spatial dots: drag to orbit around nodes, pinch or scroll to zoom, and tap a node to focus it. A native packaged mobile app can be added later with the same API, but the current PWA requires no paid hosting or app-store account.
+
+`localhost` is only the development address for the local server. After choosing `Install CiscoAI` in a supported browser, it opens as an application window. A public hosted deployment would use a domain instead of `localhost`; the free local-first setup intentionally keeps the backend on the same device.
 
 ### PC and Android packaging
 

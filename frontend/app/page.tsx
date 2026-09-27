@@ -87,7 +87,7 @@ export default function Dashboard() {
 
   return <main className="app-shell">
     <header className="topbar">
-      <div className="brand"><div className="brand-mark"><Command size={17} /></div><div><strong>CISCO</strong><span>autonomous intelligence / 01</span></div></div>
+      <div className="brand"><div className="brand-mark"><Command size={17} /></div><div><strong>CiscoAI</strong><span>autonomous intelligence / 01</span></div></div>
       <div className="top-status"><span className="live-dot" /> CORE ONLINE <span className="status-divider" /> <span className="mono">09:41:22 UTC</span></div>
       <button className="icon-button" title="Security status"><ShieldCheck size={18} /></button>
     </header>
