@@ -77,6 +77,8 @@ The desktop dashboard is a full-viewport 3D graph surface. Circular controls on 
 
 The production build is warning-free after declaring Autoprefixer explicitly in the frontend development dependencies.
 
+The graph renderer uses adaptive pixel density, high-performance WebGL, and reduced antialiasing to keep the animated scene responsive on mobile and lower-end machines. The focus button opens the current-view inspector without changing the selected node.
+
 To install it, run the frontend, open `http://localhost:3000`, then use the browser menu: Chrome/Edge on Windows choose `Install CiscoAI`; Chrome on Android choose `Add to Home screen` or `Install app`. The backend must remain running locally for agent responses and memory updates.
 
 ### Start both services together

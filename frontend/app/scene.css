@@ -11,7 +11,7 @@
 .chat-captions p { margin: 8px 0 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
 .chat-captions p b { color: var(--cyan); font: 9px 'DM Mono'; margin-right: 8px; }
 .chat-captions p.cisco { color: var(--ink); }
-.hologram-panel { position: fixed; z-index: 20; min-width: 260px; min-height: 160px; overflow: hidden; resize: none; background: linear-gradient(135deg, rgba(17, 37, 38, .94), rgba(7, 18, 19, .88)); border: 1px solid rgba(82, 229, 218, .55); box-shadow: 0 0 0 1px rgba(82, 229, 218, .08), 0 0 34px rgba(82, 229, 218, .16), inset 0 0 30px rgba(82, 229, 218, .04); backdrop-filter: blur(18px); animation: hologram-in .24s ease-out; }
+.hologram-panel { position: fixed; z-index: 20; min-width: 260px; min-height: 160px; overflow: hidden; resize: none; touch-action: none; background: linear-gradient(135deg, rgba(17, 37, 38, .66), rgba(7, 18, 19, .52)); border: 1px solid rgba(82, 229, 218, .62); box-shadow: 0 0 0 1px rgba(82, 229, 218, .1), 0 0 34px rgba(82, 229, 218, .22), inset 0 0 30px rgba(82, 229, 218, .08); backdrop-filter: blur(22px) saturate(135%); animation: hologram-in .24s ease-out; }
 .hologram-panel::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, transparent 0 5px, rgba(82, 229, 218, .025) 6px 7px); }
 .hologram-panel header { position: relative; z-index: 1; height: 34px; padding: 0 10px 0 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(82, 229, 218, .24); color: var(--cyan); font: 9px 'DM Mono'; letter-spacing: .14em; cursor: move; }
 .hologram-panel header button { border: 0; background: transparent; color: var(--muted); padding: 4px; }

@@ -23,7 +23,7 @@ export default function MemoryScene({ nodes, edges, selected, speaking, listenin
     }
     return values;
   }, []);
-  return <Canvas camera={{ position: [0, 0, 9], fov: 45 }} dpr={[1, 2]} gl={{ antialias: true }}>
+  return <Canvas camera={{ position: [0, 0, 9], fov: 45 }} dpr={[1, 1.5]} performance={{ min: 0.55 }} gl={{ antialias: false, powerPreference: "high-performance" }}>
     <color attach="background" args={["#0a1718"]} /><ambientLight intensity={1.3} /><pointLight position={[0, 2, 5]} intensity={12} color="#52e5da" />
     <points>
       <bufferGeometry><bufferAttribute attach="attributes-position" args={[spaceDots, 3]} /></bufferGeometry>
@@ -38,12 +38,14 @@ export default function MemoryScene({ nodes, edges, selected, speaking, listenin
 function MemoryNodeVisual({ node, position, level, active, speaking, listening, onSelect }: { node: MemoryNode; position: [number, number, number]; level: number; active: boolean; speaking: boolean; listening: boolean; onSelect: (id: string) => void }) {
   const groupRef = useRef<Group>(null);
   const isAgent = node.kind === "agent";
-  const color = isAgent && listening ? "#f2b66d" : colors[node.kind] ?? colors.memory;
+  const relationshipColor = level >= 3 ? "#52e5da" : level === 2 ? "#b8a3ff" : colors[node.kind] ?? colors.memory;
+  const color = isAgent && listening ? "#f2b66d" : relationshipColor;
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return;
-    groupRef.current.rotation.y += delta * (isAgent ? 0.2 : 0.07);
+    const pulse = 1 + Math.sin(clock.getElapsedTime() * (1.1 + level * 0.45) + level) * (isAgent ? 0.025 : 0.045 + level * 0.008);
+    groupRef.current.rotation.y += delta * (isAgent ? 0.2 : 0.07 + level * 0.025);
     groupRef.current.rotation.z = Math.sin(clock.getElapsedTime() * (isAgent ? 1.5 : 0.8)) * (isAgent ? 0.04 : 0.02);
-    if (isAgent && (speaking || listening)) groupRef.current.scale.setScalar((active ? 1.12 : 1) + Math.sin(clock.getElapsedTime() * (listening ? 9 : 14)) * (listening ? 0.08 : 0.11));
+    groupRef.current.scale.setScalar((active ? 1.12 : 1) * pulse + (isAgent && (speaking || listening) ? Math.sin(clock.getElapsedTime() * (listening ? 9 : 14)) * (listening ? 0.08 : 0.11) : 0));
   });
   useEffect(() => {
     if (groupRef.current && !speaking && !listening) groupRef.current.scale.setScalar(active ? 1.12 : 1);
@@ -51,7 +53,7 @@ function MemoryNodeVisual({ node, position, level, active, speaking, listening, 
   const detail = isAgent ? 2 : Math.min(2, level);
   const knowledgeSize = 0.19 + Math.min(level, 4) * 0.025;
   return <group ref={groupRef} position={position} onClick={(event) => { event.stopPropagation(); onSelect(node.id); }}>
-    <mesh rotation={[0.2, 0.4, 0]}><icosahedronGeometry args={[isAgent ? 0.48 : knowledgeSize, detail]} /><meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 2.5 : 0.6} roughness={0.14} metalness={0.55} wireframe={!isAgent} /></mesh>
+    <mesh rotation={[0.2, 0.4, 0]}>{isAgent ? <icosahedronGeometry args={[0.48, 2]} /> : level >= 3 ? <dodecahedronGeometry args={[knowledgeSize, detail]} /> : level === 2 ? <octahedronGeometry args={[knowledgeSize, detail]} /> : <tetrahedronGeometry args={[knowledgeSize, detail]} />}<meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 2.5 : 0.6} roughness={0.14} metalness={0.55} wireframe={!isAgent} /></mesh>
     <mesh rotation={[Math.PI / 2, 0, 0]} scale={1 + level * 0.05}><torusGeometry args={[isAgent ? 0.62 : 0.33, isAgent ? 0.025 : 0.014, 12, 64]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.95 : 0.58} /></mesh>
     <mesh rotation={[0, Math.PI / 3, 0]} scale={1 + level * 0.08}><torusGeometry args={[isAgent ? 0.76 : 0.43, isAgent ? 0.014 : 0.008, 10, 64]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.62 : 0.24} /></mesh>
     {isAgent && <mesh rotation={[Math.PI / 4, 0, Math.PI / 5]}><torusGeometry args={[0.94, 0.008, 8, 64]} /><meshBasicMaterial color={color} transparent opacity={0.36} /></mesh>}
