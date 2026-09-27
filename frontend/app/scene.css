@@ -3,3 +3,19 @@
 .scene-label { display: grid; gap: 2px; color: var(--ink); text-shadow: 0 1px 8px #081011; font-size: 10px; }
 .scene-label small { color: var(--muted); font: 8px 'DM Mono'; text-transform: uppercase; }
 .selected-toggle { color: var(--cyan) !important; }
+
+@media (min-width: 801px) {
+	html, body { height: 100%; overflow: hidden; }
+	.app-shell { height: 100vh; overflow: hidden; padding-bottom: 14px; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) 194px auto; }
+	.intro { padding: 30px 0 20px; }
+	.metric { padding-top: 12px; padding-bottom: 12px; }
+	.workspace-grid { min-height: 0; }
+	.graph-panel { min-height: 0; display: flex; flex-direction: column; }
+	.graph-canvas { flex: 1; height: auto; min-height: 210px; }
+	.side-stack { min-height: 0; grid-template-rows: 1fr 1fr; }
+	.focus-panel, .call-panel { min-height: 0; }
+	.lower-grid { margin-top: 14px; min-height: 0; }
+	.activity-panel, .prompt-panel { min-height: 0; }
+	.activity-item { padding-top: 9px; padding-bottom: 9px; }
+	footer { padding-top: 12px; }
+}

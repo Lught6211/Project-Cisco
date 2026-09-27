@@ -26,9 +26,11 @@ export default function MemoryScene({ nodes, edges, selected, onSelect }: { node
       <pointsMaterial size={0.035} color="#4a9290" transparent opacity={0.72} sizeAttenuation />
     </points>
     {edges.map((edge) => { const from = positions.get(edge.source); const to = positions.get(edge.target); return from && to ? <Line key={`${edge.source}-${edge.target}`} points={[from, to]} color="#397170" transparent opacity={0.65} lineWidth={1} /> : null; })}
-    {nodes.map((node) => { const position = positions.get(node.id) ?? [0, 0, 0]; const active = selected === node.id || node.active; return <group key={node.id} position={position} onClick={(event) => { event.stopPropagation(); onSelect(node.id); }}>
-      <mesh><sphereGeometry args={[active ? 0.34 : 0.22, 24, 24]} /><meshStandardMaterial color={colors[node.kind] ?? colors.memory} emissive={colors[node.kind] ?? colors.memory} emissiveIntensity={active ? 1.7 : 0.35} roughness={0.25} /></mesh>
-      <mesh scale={active ? 1.45 : 1}><sphereGeometry args={[0.42, 24, 24]} /><meshBasicMaterial color={colors[node.kind] ?? colors.memory} transparent opacity={active ? 0.13 : 0.04} wireframe /></mesh>
+    {nodes.map((node) => { const position = positions.get(node.id) ?? [0, 0, 0]; const active = selected === node.id || node.active; const color = colors[node.kind] ?? colors.memory; return <group key={node.id} position={position} onClick={(event) => { event.stopPropagation(); onSelect(node.id); }}>
+      <mesh><sphereGeometry args={[active ? 0.34 : 0.22, 32, 32]} /><meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 2.2 : 0.55} roughness={0.18} metalness={0.4} /></mesh>
+      <mesh rotation={[Math.PI / 2, 0, 0]} scale={active ? 1.35 : 1}><torusGeometry args={[0.36, 0.018, 10, 48]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.9 : 0.48} /></mesh>
+      <mesh rotation={[0, Math.PI / 3, 0]} scale={active ? 1.15 : 0.92}><torusGeometry args={[0.49, 0.009, 8, 48]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.5 : 0.2} /></mesh>
+      <mesh scale={active ? 1.5 : 1}><sphereGeometry args={[0.42, 24, 24]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.1 : 0.035} wireframe /></mesh>
     </group>; })}
     <OrbitControls enablePan enableZoom minDistance={4} maxDistance={16} makeDefault />
   </Canvas>;
