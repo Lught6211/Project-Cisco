@@ -31,6 +31,7 @@ export default function Dashboard() {
   const [graph, setGraph] = useState<Graph>(fallbackGraph);
   const [events, setEvents] = useState<Event[]>(fallbackEvents);
   const [listening, setListening] = useState(false);
+  const [callStatus, setCallStatus] = useState("ready");
   const [message, setMessage] = useState("");
   const [selected, setSelected] = useState("cisco");
 
@@ -48,6 +49,20 @@ export default function Dashboard() {
     setMessage("");
     try { await fetch(`${api}/api/agent/message`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: optimistic.detail }) }); } catch { /* local simulation remains available */ }
   };
+  const toggleListening = async () => {
+    if (listening) {
+      setListening(false);
+      setCallStatus("ready");
+      return;
+    }
+    setListening(true);
+    setCallStatus("connecting");
+    try {
+      await fetch(`${api}/api/calls/simulate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipient: "Ramen Kaito", purpose: "Confirm Friday reservation" }) });
+    } catch {
+      setCallStatus("local simulation");
+    }
+  };
 
   return <main className="app-shell">
     <header className="topbar">
@@ -63,7 +78,7 @@ export default function Dashboard() {
     <section className="workspace-grid">
       <div className="panel graph-panel"><div className="panel-head"><div><p className="eyebrow">LIVE MEMORY GRAPH</p><h2>Context topology</h2></div><span className="live-label"><CircleDot size={12} /> STREAMING</span></div><div className="graph-canvas"><div className="crosshair horizontal" /><div className="crosshair vertical" /><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Memory graph connections">{graph.edges.map((edge) => { const from = graph.nodes.find((node) => node.id === edge.source); const to = graph.nodes.find((node) => node.id === edge.target); return from && to ? <line key={`${edge.source}-${edge.target}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y} className="graph-edge" /> : null; })}</svg>{graph.nodes.map((node) => <button key={node.id} className={`graph-node node-${node.kind} ${selected === node.id ? "selected" : ""}`} style={{ left: `${node.x}%`, top: `${node.y}%` }} onClick={() => setSelected(node.id)}><span className="node-ring"><span /></span><span className="node-copy"><strong>{node.label}</strong><small>{node.kind}</small></span></button>)}</div><div className="graph-footer"><span><i className="legend-dot cyan" /> ACTIVE CONTEXT</span><span><i className="legend-dot muted" /> LONG-TERM MEMORY</span><span className="mono">UPDATED 00:00:04 AGO</span></div></div>
 
-      <aside className="side-stack"><div className="panel focus-panel"><div className="panel-head"><p className="eyebrow">FOCUS NODE</p><Sparkles size={16} className="soft-icon" /></div><div className="focus-node"><div className="focus-orbit"><BrainCircuit size={23} /></div><div><h3>{selectedNode.label}</h3><p>{selectedNode.detail}</p></div></div><div className="detail-list"><div><span>TYPE</span><strong>{selectedNode.kind.toUpperCase()}</strong></div><div><span>CONFIDENCE</span><strong className="accent-text">94.2%</strong></div><div><span>RELATIONSHIPS</span><strong>{graph.edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).length}</strong></div></div></div><div className="panel call-panel"><div className="panel-head"><p className="eyebrow">VOICE CHANNEL</p><PhoneCall size={16} className="soft-icon" /></div><div className="call-state"><div className="pulse-ring"><Mic size={20} /></div><div><strong>{listening ? "Listening now" : "Channel ready"}</strong><p>{listening ? "I'm hearing you..." : "Tap to open a local session"}</p></div></div><button className={`primary-button ${listening ? "active" : ""}`} onClick={() => setListening((value) => !value)}><Mic size={16} /> {listening ? "END LISTENING" : "START LISTENING"}</button></div></aside>
+      <aside className="side-stack"><div className="panel focus-panel"><div className="panel-head"><p className="eyebrow">FOCUS NODE</p><Sparkles size={16} className="soft-icon" /></div><div className="focus-node"><div className="focus-orbit"><BrainCircuit size={23} /></div><div><h3>{selectedNode.label}</h3><p>{selectedNode.detail}</p></div></div><div className="detail-list"><div><span>TYPE</span><strong>{selectedNode.kind.toUpperCase()}</strong></div><div><span>CONFIDENCE</span><strong className="accent-text">94.2%</strong></div><div><span>RELATIONSHIPS</span><strong>{graph.edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).length}</strong></div></div></div><div className="panel call-panel"><div className="panel-head"><p className="eyebrow">VOICE CHANNEL</p><PhoneCall size={16} className="soft-icon" /></div><div className="call-state"><div className="pulse-ring"><Mic size={20} /></div><div><strong>{listening ? "Listening now" : "Channel ready"}</strong><p>{listening ? `Outbound channel ${callStatus}` : "Tap to open a local session"}</p></div></div><button className={`primary-button ${listening ? "active" : ""}`} onClick={toggleListening}><Mic size={16} /> {listening ? "END LISTENING" : "START LISTENING"}</button></div></aside>
     </section>
 
     <section className="lower-grid"><div className="panel activity-panel"><div className="panel-head"><div><p className="eyebrow">SYSTEM TELEMETRY</p><h2>Recent activity</h2></div><button className="text-button">VIEW LOG <span>↗</span></button></div><div className="activity-list">{events.slice(0, 4).map((event) => <div className="activity-item" key={event.id}><div className={`activity-icon ${event.type}`}><Activity size={15} /></div><div><strong>{event.title}</strong><p>{event.detail}</p></div><time>{event.timestamp}</time></div>)}</div></div><div className="panel prompt-panel"><div className="panel-head"><div><p className="eyebrow">DIRECTIVE INPUT</p><h2>Give CISCO a thought</h2></div><Command size={16} className="soft-icon" /></div><div className="prompt-box"><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ask CISCO to remember, investigate, or act..." /><button className="send-button" title="Send directive" onClick={sendMessage}><Send size={16} /></button></div><div className="prompt-hint"><span><kbd>⌘</kbd> + <kbd>↵</kbd> to send</span><span>LOCAL MEMORY WRITE</span></div></div></section>

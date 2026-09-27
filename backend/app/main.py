@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 import json
-import random
+import secrets
 from typing import Literal
 
 from fastapi import FastAPI
@@ -45,6 +45,20 @@ class AgentMessage(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
 
 
+class CallRequest(BaseModel):
+    recipient: str = Field(min_length=3, max_length=120)
+    purpose: str = Field(min_length=3, max_length=500)
+
+
+class CallState(BaseModel):
+    id: str
+    status: Literal["queued", "connecting", "completed"]
+    recipient: str
+    purpose: str
+    provider: Literal["simulation", "twilio"]
+    started_at: str
+
+
 def seed_state() -> dict:
     return {
         "nodes": [
@@ -82,6 +96,7 @@ events = [
     Event(id="evt-2", type="memory", title="Memory graph hydrated", detail="5 nodes connected from local context", timestamp="2m ago"),
     Event(id="evt-3", type="system", title="CISCO online", detail="All local systems nominal", timestamp="5m ago"),
 ]
+calls: list[CallState] = []
 
 app = FastAPI(title="Project Cisco API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -92,21 +107,47 @@ def health() -> dict[str, str]:
     return {"status": "online", "service": "cisco-core"}
 
 
-@app.get("/api/graph", response_model=GraphState)
+@app.get("/api/graph")
 def get_graph() -> GraphState:
     return state
 
 
-@app.get("/api/events", response_model=list[Event])
+@app.get("/api/events")
 def get_events() -> list[Event]:
     return events
 
 
-@app.post("/api/agent/message", response_model=Event)
+@app.get("/api/calls")
+def get_calls() -> list[CallState]:
+    return calls
+
+
+@app.post("/api/calls/simulate")
+def simulate_call(payload: CallRequest) -> CallState:
+    call = CallState(
+        id=f"call-{secrets.token_hex(4)}",
+        status="connecting",
+        recipient=payload.recipient,
+        purpose=payload.purpose,
+        provider="simulation",
+        started_at=datetime.now(timezone.utc).isoformat(),
+    )
+    calls.insert(0, call)
+    events.insert(0, Event(
+        id=f"evt-{secrets.token_hex(4)}",
+        type="call",
+        title="Outbound call connecting",
+        detail=f"Simulation to {payload.recipient}: {payload.purpose}",
+        timestamp="just now",
+    ))
+    return call
+
+
+@app.post("/api/agent/message")
 def send_message(payload: AgentMessage) -> Event:
     global state
     event = Event(
-        id=f"evt-{random.randint(100, 999)}",
+        id=f"evt-{secrets.token_hex(4)}",
         type="memory",
         title="Context captured",
         detail=payload.message,
