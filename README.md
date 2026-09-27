@@ -75,6 +75,8 @@ The dashboard is responsive and installable as a CiscoAI PWA on desktop and mobi
 
 The desktop dashboard is a full-viewport 3D graph surface. Circular controls on the right edge open focus, activity, and chat holograms only when needed; each hologram can be dragged, resized, and closed. Voice stays button-only: the mic glows amber while listening, CiscoAI changes to amber, and its core returns to a cyan speaking waveform while answering. CiscoAI captions appear in a scrollable transparent box at bottom-left. Node names billboard toward the camera at every angle, while relationship depth changes node geometry, edge color, line weight, and dash pattern. Mobile keeps responsive scrolling where the smaller screen requires it.
 
+The production build is warning-free after declaring Autoprefixer explicitly in the frontend development dependencies.
+
 To install it, run the frontend, open `http://localhost:3000`, then use the browser menu: Chrome/Edge on Windows choose `Install CiscoAI`; Chrome on Android choose `Add to Home screen` or `Install app`. The backend must remain running locally for agent responses and memory updates.
 
 ### Start both services together

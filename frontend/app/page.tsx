@@ -130,7 +130,7 @@ export default function Dashboard() {
     <footer><span>PROJECT CISCO / CONTROL SURFACE</span><span className="mono">BUILD 0.1.0 <i className="live-dot" /></span></footer>
     {focusOpen && <FloatingPanel title="FOCUS NODE" onClose={() => setFocusOpen(false)} initial={{ x: 860, y: 118, width: 310, height: 230 }}><div className="focus-node"><div className="focus-orbit"><BrainCircuit size={23} /></div><div><h3>{selectedNode.label}</h3><p>{selectedNode.detail}</p></div></div><div className="detail-list"><div><span>TYPE</span><strong>{selectedNode.kind.toUpperCase()}</strong></div><div><span>CONFIDENCE</span><strong className="accent-text">94.2%</strong></div><div><span>RELATIONSHIPS</span><strong>{graph.edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).length}</strong></div></div></FloatingPanel>}
     {activityOpen && <FloatingPanel title="SYSTEM TELEMETRY" onClose={() => setActivityOpen(false)} initial={{ x: 70, y: 150, width: 390, height: 280 }}><div className="activity-list">{events.slice(0, 6).map((event) => <div className="activity-item" key={event.id}><div className={`activity-icon ${event.type}`}><Activity size={15} /></div><div><strong>{event.title}</strong><p>{event.detail}</p></div><time>{event.timestamp}</time></div>)}</div></FloatingPanel>}
-    {chatOpen && <FloatingPanel title="CISCO CAPTIONS" onClose={() => setChatOpen(false)} initial={{ x: 70, y: 470, width: 440, height: 280 }}><div className="chat-history">{chatMessages.map((chatMessage, index) => <p className={chatMessage.role} key={`${chatMessage.role}-${index}`}><b>{chatMessage.role === "cisco" ? "CISCO" : "YOU"}</b>{chatMessage.text}</p>)}</div><div className="prompt-box"><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ask CiscoAI..." /><button className="send-button" title="Send message" onClick={sendMessage}><Send size={16} /></button></div></FloatingPanel>}
+    {chatOpen && <FloatingPanel title="CISCOAI CHAT" onClose={() => setChatOpen(false)} initial={{ x: 70, y: 470, width: 440, height: 280 }}><div className="chat-panel-body"><div className="chat-history">{chatMessages.map((chatMessage, index) => <p className={chatMessage.role} key={`${chatMessage.role}-${index}`}><b>{chatMessage.role === "cisco" ? "CISCOAI" : "YOU"}</b>{chatMessage.text}</p>)}</div><div className="prompt-box"><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ask CiscoAI..." /><button className="send-button" title="Send message" onClick={sendMessage}><Send size={16} /></button></div></div></FloatingPanel>}
     {chatMessages.some((chatMessage) => chatMessage.role === "cisco") && <div className="caption-box"><span className="eyebrow"><AudioLines size={12} /> CISCO LIVE CAPTIONS</span><div>{chatMessages.filter((chatMessage) => chatMessage.role === "cisco").slice(-3).map((chatMessage, index) => <p key={`${chatMessage.text}-${index}`}>{chatMessage.text}</p>)}</div></div>}
   </main>;
 }
@@ -145,12 +145,17 @@ function FloatingPanel({ title, initial, onClose, children }: { title: string; i
   const [frame, setFrame] = useState(initial);
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const resize = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
-  const move = (event: React.PointerEvent) => {
-    if (drag.current) setFrame((value) => ({ ...value, x: drag.current!.left + event.clientX - drag.current!.x, y: drag.current!.top + event.clientY - drag.current!.y }));
-    if (resize.current) setFrame((value) => ({ ...value, width: Math.max(260, resize.current!.width + event.clientX - resize.current!.x), height: Math.max(160, resize.current!.height + event.clientY - resize.current!.y) }));
-  };
-  const end = () => { drag.current = null; resize.current = null; };
-  return <section className="hologram-panel" style={{ left: frame.x, top: frame.y, width: frame.width, height: frame.height }} onPointerMove={move} onPointerUp={end} onPointerCancel={end}><header onPointerDown={(event) => { drag.current = { x: event.clientX, y: event.clientY, left: frame.x, top: frame.y }; }}><span>{title}</span><button title="Close panel" onPointerDown={(event) => event.stopPropagation()} onClick={onClose}><X size={14} /></button></header><div className="hologram-content">{children}</div><span className="resize-grip" onPointerDown={(event) => { event.stopPropagation(); resize.current = { x: event.clientX, y: event.clientY, width: frame.width, height: frame.height }; }} /></section>;
+  useEffect(() => {
+    const move = (event: PointerEvent) => {
+      if (drag.current) setFrame((value) => ({ ...value, x: drag.current!.left + event.clientX - drag.current!.x, y: drag.current!.top + event.clientY - drag.current!.y }));
+      if (resize.current) setFrame((value) => ({ ...value, width: Math.max(260, resize.current!.width + event.clientX - resize.current!.x), height: Math.max(160, resize.current!.height + event.clientY - resize.current!.y) }));
+    };
+    const end = () => { drag.current = null; resize.current = null; };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); };
+  }, []);
+  return <section className="hologram-panel" style={{ left: frame.x, top: frame.y, width: frame.width, height: frame.height }}><header onPointerDown={(event) => { drag.current = { x: event.clientX, y: event.clientY, left: frame.x, top: frame.y }; }}><span>{title}</span><button type="button" title="Close panel" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onClose(); }}><X size={14} /></button></header><div className="hologram-content">{children}</div><span className="resize-grip" onPointerDown={(event) => { event.stopPropagation(); resize.current = { x: event.clientX, y: event.clientY, width: frame.width, height: frame.height }; }} /></section>;
 }
 
 type SpeechRecognitionLike = { start: () => void; onresult: (event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void };

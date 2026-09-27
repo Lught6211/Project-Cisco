@@ -52,8 +52,9 @@ function MemoryNodeVisual({ node, position, level, active, speaking, listening, 
   const knowledgeSize = 0.19 + Math.min(level, 4) * 0.025;
   return <group ref={groupRef} position={position} onClick={(event) => { event.stopPropagation(); onSelect(node.id); }}>
     <mesh rotation={[0.2, 0.4, 0]}><icosahedronGeometry args={[isAgent ? 0.48 : knowledgeSize, detail]} /><meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 2.5 : 0.6} roughness={0.14} metalness={0.55} wireframe={!isAgent} /></mesh>
-    <mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[isAgent ? 0.62 : 0.33, isAgent ? 0.025 : 0.014, 12, 64]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.95 : 0.58} /></mesh>
-    <mesh rotation={[0, Math.PI / 3, 0]}><torusGeometry args={[isAgent ? 0.76 : 0.43, isAgent ? 0.014 : 0.008, 10, 64]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.62 : 0.24} /></mesh>
+    <mesh rotation={[Math.PI / 2, 0, 0]} scale={1 + level * 0.05}><torusGeometry args={[isAgent ? 0.62 : 0.33, isAgent ? 0.025 : 0.014, 12, 64]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.95 : 0.58} /></mesh>
+    <mesh rotation={[0, Math.PI / 3, 0]} scale={1 + level * 0.08}><torusGeometry args={[isAgent ? 0.76 : 0.43, isAgent ? 0.014 : 0.008, 10, 64]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.62 : 0.24} /></mesh>
+    {isAgent && <mesh rotation={[Math.PI / 4, 0, Math.PI / 5]}><torusGeometry args={[0.94, 0.008, 8, 64]} /><meshBasicMaterial color={color} transparent opacity={0.36} /></mesh>}
     <mesh scale={active ? 1.5 : 1}><sphereGeometry args={[isAgent ? 0.68 : 0.36, 24, 24]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.1 : 0.035} wireframe /></mesh>
     <Billboard follow><Text position={[isAgent ? 0.78 : 0.48, 0.16, 0]} fontSize={isAgent ? 0.19 : 0.12} color="#e9f2f2" anchorX="left" anchorY="middle" outlineWidth={0.012} outlineColor="#081011">{node.label}</Text><Text position={[isAgent ? 0.78 : 0.48, -0.02, 0]} fontSize={0.075} color={color} anchorX="left" anchorY="middle" letterSpacing={0.08}>{node.kind.toUpperCase()}</Text></Billboard>
   </group>;

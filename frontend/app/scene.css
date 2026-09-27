@@ -18,7 +18,8 @@
 .hologram-panel header button:hover { color: var(--cyan); }
 .hologram-content { position: relative; z-index: 1; height: calc(100% - 34px); overflow: auto; padding: 10px; }
 .resize-grip { position: absolute; right: 3px; bottom: 3px; width: 14px; height: 14px; cursor: nwse-resize; border-right: 2px solid var(--cyan); border-bottom: 2px solid var(--cyan); opacity: .75; }
-.chat-history { overflow: auto; height: calc(100% - 68px); padding: 0 5px; }
+.chat-panel-body { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.chat-history { flex: 1; min-height: 0; overflow: auto; padding: 0 5px 8px; }
 .chat-history p { margin: 0 0 11px; color: var(--muted); font-size: 11px; line-height: 1.4; }
 .chat-history p.cisco { color: var(--ink); }
 .chat-history b { color: var(--cyan); font: 9px 'DM Mono'; margin-right: 8px; }
