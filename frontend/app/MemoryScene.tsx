@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas } from "@react-three/fiber";
-import { Line, OrbitControls, Text } from "@react-three/drei";
+import { Billboard, Line, OrbitControls, Text } from "@react-three/drei";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Vector3 } from "three";
@@ -52,8 +52,7 @@ function MemoryNodeVisual({ node, position, active, speaking, onSelect }: { node
     <mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[isAgent ? 0.62 : 0.33, isAgent ? 0.025 : 0.014, 12, 64]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.95 : 0.58} /></mesh>
     <mesh rotation={[0, Math.PI / 3, 0]}><torusGeometry args={[isAgent ? 0.76 : 0.43, isAgent ? 0.014 : 0.008, 10, 64]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.62 : 0.24} /></mesh>
     <mesh scale={active ? 1.5 : 1}><sphereGeometry args={[isAgent ? 0.68 : 0.36, 24, 24]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.1 : 0.035} wireframe /></mesh>
-    <Text position={[isAgent ? 0.78 : 0.48, 0.16, 0]} fontSize={isAgent ? 0.19 : 0.12} color="#e9f2f2" anchorX="left" anchorY="middle" outlineWidth={0.012} outlineColor="#081011">{node.label}</Text>
-    <Text position={[isAgent ? 0.78 : 0.48, -0.02, 0]} fontSize={0.075} color={color} anchorX="left" anchorY="middle" letterSpacing={0.08}>{node.kind.toUpperCase()}</Text>
+    <Billboard follow><Text position={[isAgent ? 0.78 : 0.48, 0.16, 0]} fontSize={isAgent ? 0.19 : 0.12} color="#e9f2f2" anchorX="left" anchorY="middle" outlineWidth={0.012} outlineColor="#081011">{node.label}</Text><Text position={[isAgent ? 0.78 : 0.48, -0.02, 0]} fontSize={0.075} color={color} anchorX="left" anchorY="middle" letterSpacing={0.08}>{node.kind.toUpperCase()}</Text></Billboard>
   </group>;
 }
 

@@ -73,7 +73,7 @@ Use the dashboard directive box to ask a question. CISCO runs local-only by defa
 
 The dashboard is responsive and installable as a CiscoAI PWA on desktop and mobile browsers. The memory graph is a Three.js scene with JARVIS-style spatial dots: drag to orbit around nodes, pinch or scroll to zoom, and tap a node to focus it. A native packaged mobile app can be added later with the same API, but the current PWA requires no paid hosting or app-store account.
 
-The desktop dashboard is a full-viewport 3D graph surface. Circular controls on the right edge open focus, voice, and captions drawers only when needed. The CiscoAI core pulses in a waveform while speech output is active. Mobile keeps responsive scrolling where the smaller screen requires it.
+The desktop dashboard is a full-viewport 3D graph surface. Circular controls on the right edge open focus, activity, and chat holograms only when needed; each hologram can be dragged and resized. Voice stays button-only, with an animated mic state and no voice panel. CiscoAI captions appear in a scrollable transparent box at bottom-left, and the CiscoAI core pulses in a waveform while speech output is active. Node names billboard toward the camera at every angle. Mobile keeps responsive scrolling where the smaller screen requires it.
 
 To install it, run the frontend, open `http://localhost:3000`, then use the browser menu: Chrome/Edge on Windows choose `Install CiscoAI`; Chrome on Android choose `Add to Home screen` or `Install app`. The backend must remain running locally for agent responses and memory updates.
 

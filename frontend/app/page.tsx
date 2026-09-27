@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Activity, AudioLines, BrainCircuit, CircleDot, Command, Mic, PhoneCall, Radio, Send, ShieldCheck, Signal, Sparkles } from "lucide-react";
+import { Activity, AudioLines, BrainCircuit, CircleDot, Command, MessageCircle, Mic, PhoneCall, Radio, Send, ShieldCheck, Signal, Sparkles, X } from "lucide-react";
 import "./scene.css";
 
 const MemoryScene = dynamic(() => import("./MemoryScene"), { ssr: false, loading: () => <div className="scene-loading">INITIALIZING 3D MEMORY...</div> });
@@ -45,6 +45,9 @@ export default function Dashboard() {
   const [sideOpen, setSideOpen] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [selected, setSelected] = useState("cisco");
+  const [focusOpen, setFocusOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([fetch(`${api}/api/graph`).then((r) => r.json()), fetch(`${api}/api/events`).then((r) => r.json())])
@@ -58,6 +61,7 @@ export default function Dashboard() {
     const optimistic: Event = { id: `local-${Date.now()}`, type: "memory", title: "Context captured", detail: question, timestamp: "just now" };
     setChatMessages((current) => [...current, { role: "user", text: question }]);
     setDrawerOpen(true);
+    setChatOpen(true);
     setEvents((current) => [optimistic, ...current]);
     setMessage("");
     try {
@@ -83,8 +87,10 @@ export default function Dashboard() {
     const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
     if (!Recognition) return;
     setVoiceEnabled(true);
+    setListening(true);
     const recognition = new Recognition();
     recognition.onresult = (event) => { void askQuestion(event.results[0][0].transcript); };
+    (recognition as SpeechRecognitionLike & { onend?: () => void }).onend = () => setListening(false);
     recognition.start();
   };
   const toggleListening = async () => {
@@ -119,16 +125,32 @@ export default function Dashboard() {
       <aside className={`side-stack ${sideOpen ? "side-open" : ""}`}><div className="panel focus-panel"><div className="panel-head"><p className="eyebrow">FOCUS NODE</p><Sparkles size={16} className="soft-icon" /></div><div className="focus-node"><div className="focus-orbit"><BrainCircuit size={23} /></div><div><h3>{selectedNode.label}</h3><p>{selectedNode.detail}</p></div></div><div className="detail-list"><div><span>TYPE</span><strong>{selectedNode.kind.toUpperCase()}</strong></div><div><span>CONFIDENCE</span><strong className="accent-text">94.2%</strong></div><div><span>RELATIONSHIPS</span><strong>{graph.edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).length}</strong></div></div></div><div className="panel call-panel"><div className="panel-head"><p className="eyebrow">VOICE CHANNEL</p><PhoneCall size={16} className="soft-icon" /></div><div className="call-state"><div className="pulse-ring"><Mic size={20} /></div><div><strong>{listening ? "Listening now" : "Channel ready"}</strong><p>{listening ? `Outbound channel ${callStatus}` : "Tap to open a local session"}</p></div></div><button className={`primary-button ${listening ? "active" : ""}`} onClick={toggleListening}><Mic size={16} /> {listening ? "END LISTENING" : "START LISTENING"}</button></div></aside>
     </section>
 
-    <FunctionRail onFocus={() => { setSelected("cisco"); setSideOpen(true); }} onVoice={startVoiceInput} onActivity={() => setDrawerOpen((value) => !value)} />
+    <FunctionRail voiceActive={listening || speaking} onFocus={() => { setSelected("cisco"); setFocusOpen((value) => !value); }} onVoice={startVoiceInput} onActivity={() => setActivityOpen((value) => !value)} onChat={() => setChatOpen((value) => !value)} />
     <section className={`lower-grid ${drawerOpen ? "drawer-open" : ""}`}><div className="panel activity-panel"><div className="panel-head"><div><p className="eyebrow">SYSTEM TELEMETRY</p><h2>Recent activity</h2></div><button className="text-button">VIEW LOG <span>↗</span></button></div><div className="activity-list">{events.slice(0, 4).map((event) => <div className="activity-item" key={event.id}><div className={`activity-icon ${event.type}`}><Activity size={15} /></div><div><strong>{event.title}</strong><p>{event.detail}</p></div><time>{event.timestamp}</time></div>)}</div></div><div className="panel prompt-panel"><div className="panel-head"><div><p className="eyebrow">DIRECTIVE INPUT / CAPTIONS</p><h2>Ask, research, remember</h2></div><Command size={16} className="soft-icon" /></div><div className="chat-captions">{chatMessages.slice(-3).map((chatMessage, index) => <p className={chatMessage.role} key={`${chatMessage.role}-${index}`}><b>{chatMessage.role === "cisco" ? "CISCO" : "YOU"}</b>{chatMessage.text}</p>)}</div><div className="prompt-box"><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ask CISCO to research, remember, or act..." /><button className="send-button" title="Send directive" onClick={sendMessage}><Send size={16} /></button></div><div className="prompt-hint"><button className="text-button" onClick={startVoiceInput}><Mic size={12} /> VOICE INPUT</button><button className={`text-button ${useWeb ? "selected-toggle" : ""}`} onClick={() => setUseWeb((value) => !value)}><Radio size={12} /> {useWeb ? "WEB RESEARCH ON" : "LOCAL ONLY"}</button><span>{voiceEnabled ? "SPEAKING ENABLED" : "WEB SPEECH READY"}</span></div></div></section>
     <footer><span>PROJECT CISCO / CONTROL SURFACE</span><span className="mono">BUILD 0.1.0 <i className="live-dot" /></span></footer>
+    {focusOpen && <FloatingPanel title="FOCUS NODE" onClose={() => setFocusOpen(false)} initial={{ x: 860, y: 118, width: 310, height: 230 }}><div className="focus-node"><div className="focus-orbit"><BrainCircuit size={23} /></div><div><h3>{selectedNode.label}</h3><p>{selectedNode.detail}</p></div></div><div className="detail-list"><div><span>TYPE</span><strong>{selectedNode.kind.toUpperCase()}</strong></div><div><span>CONFIDENCE</span><strong className="accent-text">94.2%</strong></div><div><span>RELATIONSHIPS</span><strong>{graph.edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).length}</strong></div></div></FloatingPanel>}
+    {activityOpen && <FloatingPanel title="SYSTEM TELEMETRY" onClose={() => setActivityOpen(false)} initial={{ x: 70, y: 150, width: 390, height: 280 }}><div className="activity-list">{events.slice(0, 6).map((event) => <div className="activity-item" key={event.id}><div className={`activity-icon ${event.type}`}><Activity size={15} /></div><div><strong>{event.title}</strong><p>{event.detail}</p></div><time>{event.timestamp}</time></div>)}</div></FloatingPanel>}
+    {chatOpen && <FloatingPanel title="CISCO CAPTIONS" onClose={() => setChatOpen(false)} initial={{ x: 70, y: 470, width: 440, height: 280 }}><div className="chat-history">{chatMessages.map((chatMessage, index) => <p className={chatMessage.role} key={`${chatMessage.role}-${index}`}><b>{chatMessage.role === "cisco" ? "CISCO" : "YOU"}</b>{chatMessage.text}</p>)}</div><div className="prompt-box"><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ask CiscoAI..." /><button className="send-button" title="Send message" onClick={sendMessage}><Send size={16} /></button></div></FloatingPanel>}
+    {chatMessages.some((chatMessage) => chatMessage.role === "cisco") && <div className="caption-box"><span className="eyebrow"><AudioLines size={12} /> CISCO LIVE CAPTIONS</span><div>{chatMessages.filter((chatMessage) => chatMessage.role === "cisco").slice(-3).map((chatMessage, index) => <p key={`${chatMessage.text}-${index}`}>{chatMessage.text}</p>)}</div></div>}
   </main>;
 }
 
 function Metric({ label, value, accent, icon }: { label: string; value: string; accent: string; icon: React.ReactNode }) { return <div className="metric"><div className={`metric-icon ${accent}`}>{icon}</div><div><span>{label}</span><strong>{value}</strong></div></div>; }
 
-function FunctionRail({ onFocus, onVoice, onActivity }: { onFocus: () => void; onVoice: () => void; onActivity: () => void }) {
-  return <nav className="function-rail" aria-label="CiscoAI functions"><button title="Focus CiscoAI node" onClick={onFocus}><Sparkles size={17} /></button><button title="Speak to CiscoAI" onClick={onVoice}><Mic size={17} /></button><button title="Open captions" onClick={onActivity}><Command size={17} /></button></nav>;
+function FunctionRail({ onFocus, onVoice, onActivity, onChat, voiceActive }: { onFocus: () => void; onVoice: () => void; onActivity: () => void; onChat: () => void; voiceActive: boolean }) {
+  return <nav className="function-rail" aria-label="CiscoAI functions"><button title="Focus CiscoAI node" onClick={onFocus}><Sparkles size={17} /></button><button className={voiceActive ? "voice-active" : ""} title="Speak to CiscoAI" onClick={onVoice}><Mic size={17} /></button><button title="Open activity" onClick={onActivity}><Activity size={17} /></button><button title="Open chat captions" onClick={onChat}><MessageCircle size={17} /></button></nav>;
+}
+
+function FloatingPanel({ title, initial, onClose, children }: { title: string; initial: { x: number; y: number; width: number; height: number }; onClose: () => void; children: React.ReactNode }) {
+  const [frame, setFrame] = useState(initial);
+  const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  const resize = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const move = (event: React.PointerEvent) => {
+    if (drag.current) setFrame((value) => ({ ...value, x: drag.current!.left + event.clientX - drag.current!.x, y: drag.current!.top + event.clientY - drag.current!.y }));
+    if (resize.current) setFrame((value) => ({ ...value, width: Math.max(260, resize.current!.width + event.clientX - resize.current!.x), height: Math.max(160, resize.current!.height + event.clientY - resize.current!.y) }));
+  };
+  const end = () => { drag.current = null; resize.current = null; };
+  return <section className="hologram-panel" style={{ left: frame.x, top: frame.y, width: frame.width, height: frame.height }} onPointerMove={move} onPointerUp={end} onPointerCancel={end}><header onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); drag.current = { x: event.clientX, y: event.clientY, left: frame.x, top: frame.y }; }}><span>{title}</span><button title="Close panel" onClick={onClose}><X size={14} /></button></header><div className="hologram-content">{children}</div><span className="resize-grip" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); resize.current = { x: event.clientX, y: event.clientY, width: frame.width, height: frame.height }; }} /></section>;
 }
 
 type SpeechRecognitionLike = { start: () => void; onresult: (event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void };

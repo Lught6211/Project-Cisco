@@ -10,6 +10,21 @@
 .chat-captions p { margin: 8px 0 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
 .chat-captions p b { color: var(--cyan); font: 9px 'DM Mono'; margin-right: 8px; }
 .chat-captions p.cisco { color: var(--ink); }
+.hologram-panel { position: fixed; z-index: 20; min-width: 260px; min-height: 160px; overflow: hidden; resize: none; background: linear-gradient(135deg, rgba(17, 37, 38, .94), rgba(7, 18, 19, .88)); border: 1px solid rgba(82, 229, 218, .55); box-shadow: 0 0 0 1px rgba(82, 229, 218, .08), 0 0 34px rgba(82, 229, 218, .16), inset 0 0 30px rgba(82, 229, 218, .04); backdrop-filter: blur(18px); animation: hologram-in .24s ease-out; }
+.hologram-panel::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, transparent 0 5px, rgba(82, 229, 218, .025) 6px 7px); }
+.hologram-panel header { position: relative; z-index: 1; height: 34px; padding: 0 10px 0 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(82, 229, 218, .24); color: var(--cyan); font: 9px 'DM Mono'; letter-spacing: .14em; cursor: move; }
+.hologram-panel header button { border: 0; background: transparent; color: var(--muted); padding: 4px; }
+.hologram-panel header button:hover { color: var(--cyan); }
+.hologram-content { position: relative; z-index: 1; height: calc(100% - 34px); overflow: auto; padding: 10px; }
+.resize-grip { position: absolute; right: 3px; bottom: 3px; width: 14px; height: 14px; cursor: nwse-resize; border-right: 2px solid var(--cyan); border-bottom: 2px solid var(--cyan); opacity: .75; }
+.chat-history { overflow: auto; height: calc(100% - 68px); padding: 0 5px; }
+.chat-history p { margin: 0 0 11px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.chat-history p.cisco { color: var(--ink); }
+.chat-history b { color: var(--cyan); font: 9px 'DM Mono'; margin-right: 8px; }
+.caption-box { position: fixed; z-index: 14; left: 24px; bottom: 24px; width: min(420px, calc(100vw - 48px)); max-height: 150px; overflow: auto; padding: 12px 15px; background: rgba(7, 18, 19, .78); border: 1px solid rgba(82, 229, 218, .28); box-shadow: 0 0 24px rgba(82, 229, 218, .1); backdrop-filter: blur(12px); }
+.caption-box .eyebrow { margin-bottom: 8px; }
+.caption-box p { color: var(--ink); font-size: 11px; line-height: 1.4; margin: 5px 0; }
+@keyframes hologram-in { from { opacity: 0; transform: scale(.96) translateY(8px); filter: blur(4px); } to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); } }
 
 @media (min-width: 801px) {
 	html, body { height: 100%; overflow: hidden; }
@@ -47,4 +62,11 @@
 	.lower-grid:hover, .lower-grid.drawer-open { transform: translateX(0); }
 	.lower-grid::before { left: -34px; top: 50%; transform: translate(-50%, -50%) rotate(-90deg); white-space: nowrap; }
 	.function-rail { right: 14px; }
+	.side-stack, .lower-grid { display: none !important; }
+}
+
+@media (max-width: 800px) {
+	.side-stack, .lower-grid { display: none !important; }
+	.hologram-panel { left: 16px !important; top: 90px !important; width: calc(100vw - 32px) !important; max-height: calc(100vh - 120px); }
+	.caption-box { left: 12px; bottom: 12px; width: calc(100vw - 24px); }
 }
