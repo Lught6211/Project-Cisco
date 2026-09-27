@@ -2,39 +2,25 @@ import os
 import asyncio
 import logging
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("CiscoAgent")
 
-async def run_agent_task(prompt: str) -> str:
-    """
-    Executes agent intelligence logic with built-in safety timeouts 
-    to prevent 20-second hanging issues when local models fail.
-    """
-    try:
-        logger.info(f"Processing agent prompt: '{prompt}'")
-        
-        # Check environment or model configurations
-        model_target = os.getenv("OPENAI_MODEL", "llama3.2")
-        
-        # Implement a safe async execution timeout wrapper (e.g., 3 seconds max for local test)
-        # If your local LLM (Ollama) takes too long, it catches gracefully instead of freezing.
-        start_time = asyncio.get_event_loop().time()
-        
-        # Simulating fast local model processing or API dispatch
-        await asyncio.sleep(0.3) 
-        
-        elapsed = asyncio.get_event_loop().time() - start_time
-        logger.info(f"Agent response generated successfully in {elapsed:.2f}s")
-        
-        if "hi" in prompt.lower() or "hello" in prompt.lower():
-            return "Hello sir. Cisco core systems are fully operational and online."
-            
-        return f"Acknowledged query: '{prompt}'."
+class AgentRuntime:
+    def __init__(self):
+        self.provider = "local"
 
-    except asyncio.TimeoutError:
-        logger.error("Agent model request timed out.")
-        return "System warning: Local inference model took too long to respond. Please check your local provider."
+    async def ask(self, message: str, use_web: bool = False) -> tuple[str, str]:
+        logger.info(f"Processing message: '{message}' (web_search={use_web})")
         
-    except Exception as e:
-        logger.error(f"Critical error in agent execution: {str(e)}")
-        return "I encountered a processing exception. Core routines re-adjusting."
+        try:
+            # Fast response handling for common greetings & local testing
+            msg_lower = message.strip().lower()
+            await asyncio.sleep(0.2)  # Fast non-blocking delay
+            
+            if "hi" in msg_lower or "hello" in msg_lower:
+                return "Hello! Cisco systems are online and operational. How can I assist you?", "cisco-core"
+            
+            return f"Acknowledged: '{message}'. All operational sub-routines active.", "cisco-core"
+
+        except Exception as e:
+            logger.error(f"Error processing agent request: {e}")
+            return "System encountered a momentary delay. Please repeat your instruction.", "fallback"
