@@ -42,6 +42,8 @@ export default function Dashboard() {
   const [useWeb, setUseWeb] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sideOpen, setSideOpen] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const [selected, setSelected] = useState("cisco");
 
   useEffect(() => {
@@ -63,14 +65,22 @@ export default function Dashboard() {
       const result = await response.json();
       setChatMessages((current) => [...current, { role: "cisco", text: result.answer }]);
       setEvents((current) => [{ ...optimistic, detail: result.answer, title: `CISCO replied via ${result.provider}` }, ...current.slice(1)]);
-      if (voiceEnabled && "speechSynthesis" in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance(result.answer));
+      if (voiceEnabled && "speechSynthesis" in window) {
+        setSpeaking(true);
+        const utterance = new SpeechSynthesisUtterance(result.answer);
+        utterance.onend = () => setSpeaking(false);
+        window.speechSynthesis.speak(utterance);
+      }
       const nextGraph = await fetch(`${api}/api/graph`).then((graphResponse) => graphResponse.json());
       setGraph(nextGraph);
     } catch { /* local simulation remains available */ }
   };
   const sendMessage = async () => askQuestion(message);
   const startVoiceInput = () => {
-    const Recognition = (window as Window & { webkitSpeechRecognition?: new () => { start: () => void; onresult: (event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void } }).webkitSpeechRecognition;
+    setSideOpen(true);
+    setDrawerOpen(true);
+    const speechWindow = window as Window & { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike };
+    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
     if (!Recognition) return;
     setVoiceEnabled(true);
     const recognition = new Recognition();
@@ -104,12 +114,12 @@ export default function Dashboard() {
     <section className="metric-row"><Metric label="AGENT STATE" value={listening ? "LISTENING" : "READY"} accent="cyan" icon={<AudioLines size={15} />} /><Metric label="MEMORY NODES" value={String(graph.nodes.length).padStart(2, "0")} accent="lime" icon={<BrainCircuit size={15} />} /><Metric label="ACTIVE THREADS" value="01" accent="amber" icon={<Activity size={15} />} /><Metric label="UPTIME" value="99.98%" accent="violet" icon={<Signal size={15} />} /></section>
 
     <section className="workspace-grid">
-      <div className="panel graph-panel"><div className="panel-head"><div><p className="eyebrow">LIVE MEMORY GRAPH</p><h2>Context topology / 3D</h2></div><span className="live-label"><CircleDot size={12} /> ORBITAL</span></div><div className="graph-canvas graph-3d-canvas"><MemoryScene nodes={graph.nodes} edges={graph.edges} selected={selected} onSelect={setSelected} /></div><div className="graph-footer"><span><i className="legend-dot cyan" /> ACTIVE CONTEXT</span><span><i className="legend-dot muted" /> LONG-TERM MEMORY</span><span className="mono">DRAG TO ORBIT / SCROLL TO ZOOM</span></div></div>
+      <div className="panel graph-panel"><div className="panel-head"><div><p className="eyebrow">LIVE MEMORY GRAPH / SPATIAL CORE</p><h2>Context topology / 3D</h2></div><span className="live-label"><CircleDot size={12} /> ORBITAL</span></div><div className="graph-canvas graph-3d-canvas"><MemoryScene nodes={graph.nodes} edges={graph.edges} selected={selected} speaking={speaking} onSelect={setSelected} /></div><div className="graph-footer"><span><i className="legend-dot cyan" /> ACTIVE CONTEXT</span><span><i className="legend-dot muted" /> LONG-TERM MEMORY</span><span className="mono">DRAG TO ORBIT / SCROLL TO ZOOM</span></div></div>
 
-      <aside className="side-stack"><div className="panel focus-panel"><div className="panel-head"><p className="eyebrow">FOCUS NODE</p><Sparkles size={16} className="soft-icon" /></div><div className="focus-node"><div className="focus-orbit"><BrainCircuit size={23} /></div><div><h3>{selectedNode.label}</h3><p>{selectedNode.detail}</p></div></div><div className="detail-list"><div><span>TYPE</span><strong>{selectedNode.kind.toUpperCase()}</strong></div><div><span>CONFIDENCE</span><strong className="accent-text">94.2%</strong></div><div><span>RELATIONSHIPS</span><strong>{graph.edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).length}</strong></div></div></div><div className="panel call-panel"><div className="panel-head"><p className="eyebrow">VOICE CHANNEL</p><PhoneCall size={16} className="soft-icon" /></div><div className="call-state"><div className="pulse-ring"><Mic size={20} /></div><div><strong>{listening ? "Listening now" : "Channel ready"}</strong><p>{listening ? `Outbound channel ${callStatus}` : "Tap to open a local session"}</p></div></div><button className={`primary-button ${listening ? "active" : ""}`} onClick={toggleListening}><Mic size={16} /> {listening ? "END LISTENING" : "START LISTENING"}</button></div></aside>
+      <aside className={`side-stack ${sideOpen ? "side-open" : ""}`}><div className="panel focus-panel"><div className="panel-head"><p className="eyebrow">FOCUS NODE</p><Sparkles size={16} className="soft-icon" /></div><div className="focus-node"><div className="focus-orbit"><BrainCircuit size={23} /></div><div><h3>{selectedNode.label}</h3><p>{selectedNode.detail}</p></div></div><div className="detail-list"><div><span>TYPE</span><strong>{selectedNode.kind.toUpperCase()}</strong></div><div><span>CONFIDENCE</span><strong className="accent-text">94.2%</strong></div><div><span>RELATIONSHIPS</span><strong>{graph.edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).length}</strong></div></div></div><div className="panel call-panel"><div className="panel-head"><p className="eyebrow">VOICE CHANNEL</p><PhoneCall size={16} className="soft-icon" /></div><div className="call-state"><div className="pulse-ring"><Mic size={20} /></div><div><strong>{listening ? "Listening now" : "Channel ready"}</strong><p>{listening ? `Outbound channel ${callStatus}` : "Tap to open a local session"}</p></div></div><button className={`primary-button ${listening ? "active" : ""}`} onClick={toggleListening}><Mic size={16} /> {listening ? "END LISTENING" : "START LISTENING"}</button></div></aside>
     </section>
 
-    <FunctionRail onFocus={() => setSelected("cisco")} onVoice={startVoiceInput} onActivity={() => setDrawerOpen((value) => !value)} />
+    <FunctionRail onFocus={() => { setSelected("cisco"); setSideOpen(true); }} onVoice={startVoiceInput} onActivity={() => setDrawerOpen((value) => !value)} />
     <section className={`lower-grid ${drawerOpen ? "drawer-open" : ""}`}><div className="panel activity-panel"><div className="panel-head"><div><p className="eyebrow">SYSTEM TELEMETRY</p><h2>Recent activity</h2></div><button className="text-button">VIEW LOG <span>↗</span></button></div><div className="activity-list">{events.slice(0, 4).map((event) => <div className="activity-item" key={event.id}><div className={`activity-icon ${event.type}`}><Activity size={15} /></div><div><strong>{event.title}</strong><p>{event.detail}</p></div><time>{event.timestamp}</time></div>)}</div></div><div className="panel prompt-panel"><div className="panel-head"><div><p className="eyebrow">DIRECTIVE INPUT / CAPTIONS</p><h2>Ask, research, remember</h2></div><Command size={16} className="soft-icon" /></div><div className="chat-captions">{chatMessages.slice(-3).map((chatMessage, index) => <p className={chatMessage.role} key={`${chatMessage.role}-${index}`}><b>{chatMessage.role === "cisco" ? "CISCO" : "YOU"}</b>{chatMessage.text}</p>)}</div><div className="prompt-box"><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ask CISCO to research, remember, or act..." /><button className="send-button" title="Send directive" onClick={sendMessage}><Send size={16} /></button></div><div className="prompt-hint"><button className="text-button" onClick={startVoiceInput}><Mic size={12} /> VOICE INPUT</button><button className={`text-button ${useWeb ? "selected-toggle" : ""}`} onClick={() => setUseWeb((value) => !value)}><Radio size={12} /> {useWeb ? "WEB RESEARCH ON" : "LOCAL ONLY"}</button><span>{voiceEnabled ? "SPEAKING ENABLED" : "WEB SPEECH READY"}</span></div></div></section>
     <footer><span>PROJECT CISCO / CONTROL SURFACE</span><span className="mono">BUILD 0.1.0 <i className="live-dot" /></span></footer>
   </main>;
@@ -118,5 +128,7 @@ export default function Dashboard() {
 function Metric({ label, value, accent, icon }: { label: string; value: string; accent: string; icon: React.ReactNode }) { return <div className="metric"><div className={`metric-icon ${accent}`}>{icon}</div><div><span>{label}</span><strong>{value}</strong></div></div>; }
 
 function FunctionRail({ onFocus, onVoice, onActivity }: { onFocus: () => void; onVoice: () => void; onActivity: () => void }) {
-  return <nav className="function-rail" aria-label="CiscoAI functions"><button title="Focus CiscoAI node" onClick={onFocus}><Sparkles size={17} /></button><button title="Speak to CiscoAI" onClick={onVoice}><Mic size={17} /></button><button title="Open captions and activity" onClick={onActivity}><Activity size={17} /></button></nav>;
+  return <nav className="function-rail" aria-label="CiscoAI functions"><button title="Focus CiscoAI node" onClick={onFocus}><Sparkles size={17} /></button><button title="Speak to CiscoAI" onClick={onVoice}><Mic size={17} /></button><button title="Open captions" onClick={onActivity}><Command size={17} /></button></nav>;
 }
+
+type SpeechRecognitionLike = { start: () => void; onresult: (event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void };

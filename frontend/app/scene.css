@@ -31,3 +31,20 @@
 	.activity-item { padding-top: 9px; padding-bottom: 9px; }
 	footer { padding-top: 12px; }
 }
+
+@media (min-width: 801px) {
+	.app-shell { display: block; position: relative; height: 100vh; padding: 0; }
+	.topbar { position: fixed; z-index: 10; top: 0; left: 50%; width: min(1100px, calc(100% - 48px)); transform: translateX(-50%); background: rgba(8, 16, 17, .62); backdrop-filter: blur(12px); }
+	.intro, .metric-row { display: none; }
+	.workspace-grid { position: fixed; inset: 0; height: 100vh; }
+	.graph-panel { position: absolute; inset: 0; height: 100%; border: 0; background: #081011; }
+	.graph-panel .panel-head { position: absolute; z-index: 3; top: 82px; left: max(24px, calc((100% - 1100px) / 2)); right: max(24px, calc((100% - 1100px) / 2)); padding: 12px 0; pointer-events: none; }
+	.graph-panel .graph-canvas { position: absolute; inset: 0; height: 100%; min-height: 0; margin: 0; border: 0; }
+	.graph-panel .graph-footer { position: absolute; z-index: 3; bottom: 14px; left: max(24px, calc((100% - 1100px) / 2)); right: max(24px, calc((100% - 1100px) / 2)); padding: 8px 0; pointer-events: none; }
+	.side-stack { top: 132px; right: 76px; transform: translateX(calc(100% + 22px)); }
+	.side-stack.side-open { transform: translateX(0); }
+	.lower-grid { top: 132px; right: 76px; bottom: 24px; left: auto; width: min(370px, calc(100% - 110px)); grid-template-columns: 1fr; transform: translateX(calc(100% + 22px)); }
+	.lower-grid:hover, .lower-grid.drawer-open { transform: translateX(0); }
+	.lower-grid::before { left: -34px; top: 50%; transform: translate(-50%, -50%) rotate(-90deg); white-space: nowrap; }
+	.function-rail { right: 14px; }
+}
