@@ -1,16 +1,23 @@
 from datetime import datetime, timezone
+import base64
+import hashlib
+import hmac
+import os
 from pathlib import Path
 import json
 import secrets
 from typing import Literal
+from urllib.parse import parse_qs
+from xml.sax.saxutils import escape
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .agent import AgentRuntime
 
 DATA_PATH = Path(__file__).parent.parent / "data" / "memory.json"
+JUST_NOW = "just now"
 
 
 class GraphNode(BaseModel):
@@ -92,6 +99,34 @@ def save_state(state: GraphState) -> None:
     DATA_PATH.write_text(state.model_dump_json(indent=2))
 
 
+def verify_twilio_signature(url: str, params: dict[str, str], signature: str, auth_token: str) -> bool:
+    signed_payload = url + "".join(f"{key}{params[key]}" for key in sorted(params))
+    digest = hmac.new(
+        auth_token.encode(),
+        signed_payload.encode(),
+        lambda data=b"": hashlib.sha1(data, usedforsecurity=False),
+    ).digest()
+    expected = base64.b64encode(digest).decode()
+    return hmac.compare_digest(expected, signature)
+
+
+def parse_twilio_form(body: bytes) -> dict[str, str]:
+    return {key: values[0] for key, values in parse_qs(body.decode("utf-8")).items() if values}
+
+
+def require_twilio_signature(request: Request, params: dict[str, str]) -> None:
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN", "")
+    if not auth_token:
+        return
+    signature = request.headers.get("X-Twilio-Signature", "")
+    if not signature or not verify_twilio_signature(str(request.url), params, signature, auth_token):
+        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+
+
+def twiml_response(content: str) -> Response:
+    return Response(content=f'<?xml version="1.0" encoding="UTF-8"?><Response>{content}</Response>', media_type="application/xml")
+
+
 state = load_state()
 events = [
     Event(id="evt-1", type="call", title="Call simulation ready", detail="Outbound voice channel is standing by", timestamp="now"),
@@ -141,9 +176,52 @@ def simulate_call(payload: CallRequest) -> CallState:
         type="call",
         title="Outbound call connecting",
         detail=f"Simulation to {payload.recipient}: {payload.purpose}",
-        timestamp="just now",
+        timestamp=JUST_NOW,
     ))
     return call
+
+
+@app.post("/api/telephony/voice", responses={403: {"description": "Invalid Twilio signature"}})
+async def twilio_voice_webhook(request: Request) -> Response:
+    params = parse_twilio_form(await request.body())
+    require_twilio_signature(request, params)
+    call_sid = params.get("CallSid", f"call-{secrets.token_hex(4)}")
+    caller = params.get("From", "unknown caller")
+    calls.insert(0, CallState(
+        id=call_sid,
+        status="connecting",
+        recipient=caller,
+        purpose="Inbound Twilio voice session",
+        provider="twilio",
+        started_at=datetime.now(timezone.utc).isoformat(),
+    ))
+    events.insert(0, Event(
+        id=f"evt-{secrets.token_hex(4)}",
+        type="call",
+        title="Twilio voice session started",
+        detail=f"Inbound call from {caller}",
+        timestamp=JUST_NOW,
+    ))
+    prompt = escape("CISCO is online. Tell me how I can help.")
+    return twiml_response(f'<Gather input="speech" action="/api/telephony/speech" method="POST" speechTimeout="auto"><Say>{prompt}</Say></Gather><Say>I did not hear anything. Goodbye.</Say>')
+
+
+@app.post("/api/telephony/speech", responses={403: {"description": "Invalid Twilio signature"}})
+async def twilio_speech_webhook(request: Request) -> Response:
+    params = parse_twilio_form(await request.body())
+    require_twilio_signature(request, params)
+    speech = params.get("SpeechResult", "")
+    if not speech:
+        return twiml_response('<Say>I did not catch that. Goodbye.</Say>')
+    reply, provider = agent.respond(speech)
+    events.insert(0, Event(
+        id=f"evt-{secrets.token_hex(4)}",
+        type="call",
+        title=f"Voice directive answered via {provider}",
+        detail=reply,
+        timestamp=JUST_NOW,
+    ))
+    return twiml_response(f'<Gather input="speech" action="/api/telephony/speech" method="POST" speechTimeout="auto"><Say>{escape(reply)}</Say></Gather>')
 
 
 @app.post("/api/agent/message")
@@ -155,7 +233,7 @@ def send_message(payload: AgentMessage) -> Event:
         type="memory",
         title=f"CISCO replied via {provider}",
         detail=response,
-        timestamp="just now",
+        timestamp=JUST_NOW,
     )
     events.insert(0, event)
     state.updated_at = datetime.now(timezone.utc).isoformat()

@@ -53,9 +53,19 @@ $env:OPENAI_API_KEY = "your-key"
 Invoke-RestMethod http://localhost:8000/api/agent/message -Method Post -ContentType 'application/json' -Body '{"message":"Remember that Maya prefers window tables"}'
 ```
 
+### Connect Twilio webhooks
+
+Set `TWILIO_AUTH_TOKEN` in the backend environment, then configure the Twilio phone number Voice webhook to point to:
+
+```text
+https://your-public-host.example.com/api/telephony/voice
+```
+
+The voice route starts a speech gather, and `/api/telephony/speech` sends the recognized text through CISCO and returns escaped TwiML. When `TWILIO_AUTH_TOKEN` is set, requests without a valid `X-Twilio-Signature` are rejected with `403`. For local development without credentials, the route accepts unsigned requests so the XML contract can be tested safely.
+
 ## Next milestones
 
-1. Replace the simulation provider with Twilio webhook and media-stream adapters with signed request validation.
+1. Add Twilio media-stream streaming for low-latency bidirectional audio.
 2. Replace the JSON store with a graph/vector persistence layer and event streaming.
 3. Add authenticated WebSocket updates for graph, agent responses, and call state.
 4. Add a task planner that can turn approved directives into tool calls.
