@@ -13,7 +13,7 @@ Project Cisco is a local-first foundation for an autonomous, voice-enabled AI ag
 
 ### Backend
 
-Use Python 3.11 or newer:
+Use Python 3.10 or newer:
 
 ```powershell
 cd backend
