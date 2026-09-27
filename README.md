@@ -7,6 +7,7 @@ Project Cisco is a local-first foundation for an autonomous, voice-enabled AI ag
 - `backend/`: FastAPI service with health, graph, event, agent-message, and simulated outbound-call endpoints.
 - `backend/app/agent.py`: provider-neutral agent runtime with a deterministic local fallback and optional OpenAI-compatible chat completion support.
 - `backend/app/realtime.py`: optional realtime audio bridge for Twilio G.711 media and an OpenAI-compatible realtime provider.
+- `backend/app/web.py`: free DuckDuckGo HTML search adapter for research context.
 - `backend/data/memory.json`: created on first API start and used as the local memory store.
 - `frontend/`: Next.js dashboard with a rendered memory topology, voice-session simulation, telemetry, and directive input.
 - Provider integrations are intentionally isolated for the next milestone. No API keys are required for the local simulation.
@@ -64,6 +65,10 @@ Invoke-RestMethod http://localhost:8000/api/agent/message -Method Post -ContentT
 ```
 
 If Ollama is unavailable, CISCO automatically uses the deterministic local simulation response.
+
+### Research, memory, and browser speech
+
+Use the dashboard directive box to ask a question. CISCO searches DuckDuckGo, sends the result snippets to Ollama, stores the research topic and up to three sources in the memory graph, and returns the answer. No search API key is required. The `VOICE INPUT` control uses the browser Web Speech API, and answers can be spoken through the browser when voice mode is enabled. Browser speech support varies by browser and may require microphone permission.
 
 ### Connect Twilio webhooks
 

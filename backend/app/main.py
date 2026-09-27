@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from .agent import AgentRuntime
 from .realtime import RealtimeBridge, provider_audio_loop
+from .web import SearchResult, search_web
 
 DATA_PATH = Path(__file__).parent.parent / "data" / "memory.json"
 JUST_NOW = "just now"
@@ -54,6 +55,13 @@ class Event(BaseModel):
 
 class AgentMessage(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
+
+
+class AgentAnswer(BaseModel):
+    answer: str
+    provider: str
+    sources: list[SearchResult]
+    memory_node_id: str
 
 
 class CallRequest(BaseModel):
@@ -274,6 +282,35 @@ def stop_media_stream(stream_id: str) -> None:
     ))
 
 
+def remember_research(message: str, answer: str, sources: list[SearchResult]) -> str:
+    node_id = f"research-{secrets.token_hex(4)}"
+    index = len(state.nodes)
+    state.nodes.append(GraphNode(
+        id=node_id,
+        label=message[:28],
+        kind="memory",
+        detail=answer[:180],
+        x=18 + (index * 17) % 65,
+        y=18 + (index * 23) % 65,
+        active=True,
+    ))
+    state.edges.append(GraphEdge(source="cisco", target=node_id, label="researched"))
+    for source in sources[:3]:
+        source_id = f"source-{secrets.token_hex(4)}"
+        state.nodes.append(GraphNode(
+            id=source_id,
+            label=source.title[:28],
+            kind="place",
+            detail=source.url,
+            x=15 + (len(state.nodes) * 19) % 70,
+            y=15 + (len(state.nodes) * 13) % 70,
+        ))
+        state.edges.append(GraphEdge(source=node_id, target=source_id, label="supported by"))
+    state.updated_at = datetime.now(timezone.utc).isoformat()
+    save_state(state)
+    return node_id
+
+
 @app.websocket("/api/telephony/media-stream")
 async def twilio_media_stream(websocket: WebSocket) -> None:
     await websocket.accept()
@@ -336,3 +373,22 @@ def send_message(payload: AgentMessage) -> Event:
     state.updated_at = datetime.now(timezone.utc).isoformat()
     save_state(state)
     return event
+
+
+@app.post("/api/agent/ask")
+def ask_agent(payload: AgentMessage) -> AgentAnswer:
+    try:
+        sources = search_web(payload.message)
+    except (OSError, ValueError):
+        sources = []
+    context = "\n".join(f"- {source.title}: {source.snippet} ({source.url})" for source in sources)
+    answer, provider = agent.respond(payload.message, context)
+    memory_node_id = remember_research(payload.message, answer, sources)
+    events.insert(0, Event(
+        id=f"evt-{secrets.token_hex(4)}",
+        type="memory",
+        title=f"Research stored via {provider}",
+        detail=answer[:500],
+        timestamp=JUST_NOW,
+    ))
+    return AgentAnswer(answer=answer, provider=provider, sources=sources, memory_node_id=memory_node_id)
