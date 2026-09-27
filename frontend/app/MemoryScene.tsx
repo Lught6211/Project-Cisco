@@ -1,8 +1,10 @@
 "use client";
 
 import { Canvas } from "@react-three/fiber";
-import { Line, OrbitControls } from "@react-three/drei";
-import { useMemo } from "react";
+import { Line, OrbitControls, Text } from "@react-three/drei";
+import { useEffect, useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
+import type { Group } from "three";
 
 type MemoryNode = { id: string; label: string; kind: string; x: number; y: number; active?: boolean };
 type MemoryEdge = { source: string; target: string; label: string };
@@ -26,12 +28,44 @@ export default function MemoryScene({ nodes, edges, selected, onSelect }: { node
       <pointsMaterial size={0.035} color="#4a9290" transparent opacity={0.72} sizeAttenuation />
     </points>
     {edges.map((edge) => { const from = positions.get(edge.source); const to = positions.get(edge.target); return from && to ? <Line key={`${edge.source}-${edge.target}`} points={[from, to]} color="#397170" transparent opacity={0.65} lineWidth={1} /> : null; })}
-    {nodes.map((node) => { const position = positions.get(node.id) ?? [0, 0, 0]; const active = selected === node.id || node.active; const color = colors[node.kind] ?? colors.memory; return <group key={node.id} position={position} onClick={(event) => { event.stopPropagation(); onSelect(node.id); }}>
-      <mesh><sphereGeometry args={[active ? 0.34 : 0.22, 32, 32]} /><meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 2.2 : 0.55} roughness={0.18} metalness={0.4} /></mesh>
-      <mesh rotation={[Math.PI / 2, 0, 0]} scale={active ? 1.35 : 1}><torusGeometry args={[0.36, 0.018, 10, 48]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.9 : 0.48} /></mesh>
-      <mesh rotation={[0, Math.PI / 3, 0]} scale={active ? 1.15 : 0.92}><torusGeometry args={[0.49, 0.009, 8, 48]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.5 : 0.2} /></mesh>
-      <mesh scale={active ? 1.5 : 1}><sphereGeometry args={[0.42, 24, 24]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.1 : 0.035} wireframe /></mesh>
-    </group>; })}
-    <OrbitControls enablePan enableZoom minDistance={4} maxDistance={16} makeDefault />
+    {nodes.map((node) => <MemoryNodeVisual key={node.id} node={node} position={positions.get(node.id) ?? [0, 0, 0]} active={selected === node.id || node.active === true} onSelect={onSelect} />)}
+    <SceneControls selectedPosition={positions.get(selected)} />
   </Canvas>;
+}
+
+function MemoryNodeVisual({ node, position, active, onSelect }: { node: MemoryNode; position: [number, number, number]; active: boolean; onSelect: (id: string) => void }) {
+  const groupRef = useRef<Group>(null);
+  const color = colors[node.kind] ?? colors.memory;
+  const isAgent = node.kind === "agent";
+  useFrame(({ clock }, delta) => {
+    if (!groupRef.current) return;
+    groupRef.current.rotation.y += delta * (isAgent ? 0.2 : 0.07);
+    groupRef.current.rotation.z = Math.sin(clock.getElapsedTime() * (isAgent ? 1.5 : 0.8)) * (isAgent ? 0.04 : 0.02);
+  });
+  useEffect(() => {
+    if (groupRef.current) groupRef.current.scale.setScalar(active ? 1.12 : 1);
+  }, [active]);
+  return <group ref={groupRef} position={position} onClick={(event) => { event.stopPropagation(); onSelect(node.id); }}>
+    <mesh rotation={[0.2, 0.4, 0]}><icosahedronGeometry args={[isAgent ? 0.48 : 0.25, isAgent ? 2 : 1]} /><meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 2.5 : 0.6} roughness={0.14} metalness={0.55} wireframe={!isAgent} /></mesh>
+    <mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[isAgent ? 0.62 : 0.33, isAgent ? 0.025 : 0.014, 12, 64]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.95 : 0.58} /></mesh>
+    <mesh rotation={[0, Math.PI / 3, 0]}><torusGeometry args={[isAgent ? 0.76 : 0.43, isAgent ? 0.014 : 0.008, 10, 64]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.62 : 0.24} /></mesh>
+    <mesh scale={active ? 1.5 : 1}><sphereGeometry args={[isAgent ? 0.68 : 0.36, 24, 24]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.1 : 0.035} wireframe /></mesh>
+    <Text position={[isAgent ? 0.78 : 0.48, 0.16, 0]} fontSize={isAgent ? 0.19 : 0.12} color="#e9f2f2" anchorX="left" anchorY="middle" outlineWidth={0.012} outlineColor="#081011">{node.label}</Text>
+    <Text position={[isAgent ? 0.78 : 0.48, -0.02, 0]} fontSize={0.075} color={color} anchorX="left" anchorY="middle" letterSpacing={0.08}>{node.kind.toUpperCase()}</Text>
+  </group>;
+}
+
+function SceneControls({ selectedPosition }: { selectedPosition?: [number, number, number] }) {
+  const controlsRef = useRef<any>(null);
+  const lastTarget = useRef<string>("");
+  useEffect(() => {
+    if (!selectedPosition || !controlsRef.current) return;
+    const targetKey = selectedPosition.join(",");
+    if (targetKey === lastTarget.current) return;
+    lastTarget.current = targetKey;
+    controlsRef.current.target.set(...selectedPosition);
+    controlsRef.current.object.position.set(selectedPosition[0], selectedPosition[1], selectedPosition[2] + 3.8);
+    controlsRef.current.update();
+  }, [selectedPosition]);
+  return <OrbitControls ref={controlsRef} enablePan enableZoom zoomToCursor minDistance={2.5} maxDistance={22} enableDamping dampingFactor={0.08} minAzimuthAngle={-Infinity} maxAzimuthAngle={Infinity} makeDefault />;
 }

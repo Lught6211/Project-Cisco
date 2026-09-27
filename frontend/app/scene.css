@@ -6,15 +6,19 @@
 
 @media (min-width: 801px) {
 	html, body { height: 100%; overflow: hidden; }
-	.app-shell { height: 100vh; overflow: hidden; padding-bottom: 14px; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) 194px auto; }
+	.app-shell { height: 100vh; overflow: hidden; padding-bottom: 14px; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
 	.intro { padding: 30px 0 20px; }
 	.metric { padding-top: 12px; padding-bottom: 12px; }
-	.workspace-grid { min-height: 0; }
+	.workspace-grid { min-height: 0; display: block; position: relative; }
 	.graph-panel { min-height: 0; display: flex; flex-direction: column; }
 	.graph-canvas { flex: 1; height: auto; min-height: 210px; }
-	.side-stack { min-height: 0; grid-template-rows: 1fr 1fr; }
+	.side-stack { min-height: 0; grid-template-rows: 1fr 1fr; position: absolute; z-index: 5; top: 18px; right: 0; width: 304px; transform: translateX(calc(100% - 38px)); transition: transform .28s ease; }
+	.side-stack:hover { transform: translateX(0); }
+	.side-stack::before { content: 'FOCUS / VOICE'; position: absolute; left: -38px; top: 28px; width: 38px; height: 122px; writing-mode: vertical-rl; text-align: center; padding: 12px 8px; color: var(--cyan); background: #101f20; border: 1px solid var(--line); font: 9px 'DM Mono'; letter-spacing: .1em; }
 	.focus-panel, .call-panel { min-height: 0; }
-	.lower-grid { margin-top: 14px; min-height: 0; }
+	.lower-grid { position: fixed; z-index: 6; left: 50%; bottom: 0; width: min(900px, calc(100% - 48px)); margin: 0; min-height: 0; transform: translate(-50%, calc(100% - 28px)); transition: transform .28s ease; }
+	.lower-grid:hover { transform: translate(-50%, 0); }
+	.lower-grid::before { content: 'ACTIVITY / DIRECTIVE'; position: absolute; left: 50%; top: -28px; transform: translateX(-50%); height: 28px; padding: 8px 18px; color: var(--cyan); background: #101f20; border: 1px solid var(--line); font: 9px 'DM Mono'; letter-spacing: .1em; }
 	.activity-panel, .prompt-panel { min-height: 0; }
 	.activity-item { padding-top: 9px; padding-bottom: 9px; }
 	footer { padding-top: 12px; }
