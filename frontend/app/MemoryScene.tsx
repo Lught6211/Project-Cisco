@@ -11,8 +11,9 @@ type MemoryNode = { id: string; label: string; kind: string; x: number; y: numbe
 type MemoryEdge = { source: string; target: string; label: string };
 const colors: Record<string, string> = { agent: "#52e5da", person: "#c6ef78", place: "#b8a3ff", task: "#f2b66d", memory: "#6e9695" };
 
-export default function MemoryScene({ nodes, edges, selected, speaking, onSelect }: { nodes: MemoryNode[]; edges: MemoryEdge[]; selected: string; speaking: boolean; onSelect: (id: string) => void }) {
+export default function MemoryScene({ nodes, edges, selected, speaking, listening, onSelect }: { nodes: MemoryNode[]; edges: MemoryEdge[]; selected: string; speaking: boolean; listening: boolean; onSelect: (id: string) => void }) {
   const positions = useMemo(() => new Map(nodes.map((node, index) => [node.id, [(node.x - 50) / 8, (50 - node.y) / 8, ((index % 3) - 1) * 0.9] as [number, number, number]])), [nodes]);
+  const relationshipLevels = useMemo(() => new Map(nodes.map((node) => [node.id, edges.filter((edge) => edge.source === node.id || edge.target === node.id).length])), [nodes, edges]);
   const spaceDots = useMemo(() => {
     const values = new Float32Array(420 * 3);
     for (let index = 0; index < 420; index += 1) {
@@ -28,27 +29,29 @@ export default function MemoryScene({ nodes, edges, selected, speaking, onSelect
       <bufferGeometry><bufferAttribute attach="attributes-position" args={[spaceDots, 3]} /></bufferGeometry>
       <pointsMaterial size={0.035} color="#4a9290" transparent opacity={0.72} sizeAttenuation />
     </points>
-    {edges.map((edge) => { const from = positions.get(edge.source); const to = positions.get(edge.target); return from && to ? <Line key={`${edge.source}-${edge.target}`} points={[from, to]} color="#397170" transparent opacity={0.65} lineWidth={1} /> : null; })}
-    {nodes.map((node) => <MemoryNodeVisual key={node.id} node={node} position={positions.get(node.id) ?? [0, 0, 0]} active={selected === node.id || node.active === true} speaking={speaking} onSelect={onSelect} />)}
+    {edges.map((edge) => { const from = positions.get(edge.source); const to = positions.get(edge.target); const level = Math.max(1, Math.min(relationshipLevels.get(edge.source) ?? 1, 4)); return from && to ? <Line key={`${edge.source}-${edge.target}`} points={[from, to]} color={level > 2 ? "#52e5da" : level > 1 ? "#6e9695" : "#294e50"} transparent opacity={0.35 + level * 0.12} lineWidth={level * 0.55} dashed={level === 1} dashSize={0.16} gapSize={0.1} /> : null; })}
+    {nodes.map((node) => <MemoryNodeVisual key={node.id} node={node} position={positions.get(node.id) ?? [0, 0, 0]} level={relationshipLevels.get(node.id) ?? 0} active={selected === node.id || node.active === true} speaking={speaking} listening={listening} onSelect={onSelect} />)}
     <SceneControls selectedPosition={positions.get(selected)} />
   </Canvas>;
 }
 
-function MemoryNodeVisual({ node, position, active, speaking, onSelect }: { node: MemoryNode; position: [number, number, number]; active: boolean; speaking: boolean; onSelect: (id: string) => void }) {
+function MemoryNodeVisual({ node, position, level, active, speaking, listening, onSelect }: { node: MemoryNode; position: [number, number, number]; level: number; active: boolean; speaking: boolean; listening: boolean; onSelect: (id: string) => void }) {
   const groupRef = useRef<Group>(null);
-  const color = colors[node.kind] ?? colors.memory;
   const isAgent = node.kind === "agent";
+  const color = isAgent && listening ? "#f2b66d" : colors[node.kind] ?? colors.memory;
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return;
     groupRef.current.rotation.y += delta * (isAgent ? 0.2 : 0.07);
     groupRef.current.rotation.z = Math.sin(clock.getElapsedTime() * (isAgent ? 1.5 : 0.8)) * (isAgent ? 0.04 : 0.02);
-    if (isAgent && speaking) groupRef.current.scale.setScalar((active ? 1.12 : 1) + Math.sin(clock.getElapsedTime() * 14) * 0.11);
+    if (isAgent && (speaking || listening)) groupRef.current.scale.setScalar((active ? 1.12 : 1) + Math.sin(clock.getElapsedTime() * (listening ? 9 : 14)) * (listening ? 0.08 : 0.11));
   });
   useEffect(() => {
-    if (groupRef.current && !speaking) groupRef.current.scale.setScalar(active ? 1.12 : 1);
-  }, [active, speaking]);
+    if (groupRef.current && !speaking && !listening) groupRef.current.scale.setScalar(active ? 1.12 : 1);
+  }, [active, speaking, listening]);
+  const detail = isAgent ? 2 : Math.min(2, level);
+  const knowledgeSize = 0.19 + Math.min(level, 4) * 0.025;
   return <group ref={groupRef} position={position} onClick={(event) => { event.stopPropagation(); onSelect(node.id); }}>
-    <mesh rotation={[0.2, 0.4, 0]}><icosahedronGeometry args={[isAgent ? 0.48 : 0.25, isAgent ? 2 : 1]} /><meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 2.5 : 0.6} roughness={0.14} metalness={0.55} wireframe={!isAgent} /></mesh>
+    <mesh rotation={[0.2, 0.4, 0]}><icosahedronGeometry args={[isAgent ? 0.48 : knowledgeSize, detail]} /><meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 2.5 : 0.6} roughness={0.14} metalness={0.55} wireframe={!isAgent} /></mesh>
     <mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[isAgent ? 0.62 : 0.33, isAgent ? 0.025 : 0.014, 12, 64]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.95 : 0.58} /></mesh>
     <mesh rotation={[0, Math.PI / 3, 0]}><torusGeometry args={[isAgent ? 0.76 : 0.43, isAgent ? 0.014 : 0.008, 10, 64]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.62 : 0.24} /></mesh>
     <mesh scale={active ? 1.5 : 1}><sphereGeometry args={[isAgent ? 0.68 : 0.36, 24, 24]} /><meshBasicMaterial color={color} transparent opacity={active ? 0.1 : 0.035} wireframe /></mesh>

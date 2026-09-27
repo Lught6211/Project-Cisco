@@ -6,6 +6,7 @@
 .function-rail { position: fixed; z-index: 12; top: 50%; right: 0; transform: translateY(-50%); display: grid; gap: 9px; padding: 10px 8px 10px 10px; background: rgba(10, 23, 24, .88); border: 1px solid var(--line); border-right: 0; border-radius: 14px 0 0 14px; backdrop-filter: blur(12px); }
 .function-rail button { width: 42px; height: 42px; border: 1px solid #3a5b5a; border-radius: 50%; background: #102324; color: var(--cyan); display: grid; place-items: center; transition: color .2s, background .2s, transform .2s; }
 .function-rail button:hover { color: #071414; background: var(--cyan); transform: scale(1.08); }
+.function-rail button.voice-active { color: #071414; background: var(--amber); border-color: var(--amber); box-shadow: 0 0 22px rgba(242, 182, 109, .78); animation: voice-button-pulse 1s ease-in-out infinite; }
 .chat-captions { max-height: 78px; overflow: auto; padding: 0 21px 8px; border-top: 1px solid var(--line); }
 .chat-captions p { margin: 8px 0 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
 .chat-captions p b { color: var(--cyan); font: 9px 'DM Mono'; margin-right: 8px; }
@@ -25,6 +26,7 @@
 .caption-box .eyebrow { margin-bottom: 8px; }
 .caption-box p { color: var(--ink); font-size: 11px; line-height: 1.4; margin: 5px 0; }
 @keyframes hologram-in { from { opacity: 0; transform: scale(.96) translateY(8px); filter: blur(4px); } to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); } }
+@keyframes voice-button-pulse { 50% { transform: scale(1.08); box-shadow: 0 0 32px rgba(242, 182, 109, .95); } }
 
 @media (min-width: 801px) {
 	html, body { height: 100%; overflow: hidden; }
