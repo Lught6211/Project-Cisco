@@ -11,10 +11,10 @@ type MemoryNode = { id: string; label: string; kind: string; x: number; y: numbe
 type MemoryEdge = { source: string; target: string; label: string };
 
 const colors: Record<string, string> = { 
-  agent: "#3b82f6",   // Default Agent Blue
+  agent: "#3b82f6",   // Blue for Idle Agent
   person: "#c6ef78",  // Green
   place: "#b8a3ff",   // Purple
-  task: "#f2b66d",    // Yellow/Amber
+  task: "#f2b66d",    // Amber/Yellow
   memory: "#6e9695"   // Muted Cyan
 };
 
@@ -99,12 +99,12 @@ function MemoryNodeVisual({ node, position, level, active, voiceState, onSelect 
   const isAgent = node.kind === "agent";
   const relationshipColor = level >= 3 ? "#52e5da" : level === 2 ? "#b8a3ff" : colors[node.kind] ?? colors.memory;
   
-  // Exact Requested Color Mapping: Idle = Blue (#3b82f6), Listening = Yellow (#f2b66d), Thinking = Purple (#b8a3ff), Speaking = Green (#c6ef78)
+  // Color Mapping: Idle = Blue (#3b82f6), Listening = Yellow (#f2b66d), Thinking = Purple (#b8a3ff), Speaking = Green (#c6ef78)
   const stateColor = 
     voiceState === "listening" ? "#f2b66d" : 
     voiceState === "thinking" ? "#b8a3ff" : 
     voiceState === "speaking" ? "#c6ef78" : 
-    "#3b82f6";
+    "#3b82f6"; // Explicit Blue for Idle
 
   const color = isAgent ? stateColor : relationshipColor;
 
