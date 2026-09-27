@@ -1,4 +1,7 @@
 {
   "python.terminal.useEnvFile": true,
-  "python.envFile": "${workspaceFolder}/backend/.env"
+  "python.envFile": "${workspaceFolder}/backend/.env",
+  "terminal.integrated.env.windows": {
+    "PATH": "C:\\Program Files\\nodejs;${env:PATH}"
+  }
 }

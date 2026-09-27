@@ -35,6 +35,8 @@ npm ci
 npm run dev
 ```
 
+If PowerShell says `npm` is not recognized after installing Node.js, close the old VS Code terminal with the trash icon and open a new terminal. The workspace adds `C:\Program Files\nodejs` to new Windows terminal sessions automatically.
+
 Open `http://localhost:3000`. The dashboard will use seeded local data if the backend is not running.
 
 ### Simulate an outbound call
