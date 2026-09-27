@@ -11,7 +11,7 @@ type MemoryNode = { id: string; label: string; kind: string; x: number; y: numbe
 type MemoryEdge = { source: string; target: string; label: string };
 const colors: Record<string, string> = { agent: "#52e5da", person: "#c6ef78", place: "#b8a3ff", task: "#f2b66d", memory: "#6e9695" };
 
-export default function MemoryScene({ nodes, edges, selected, speaking, listening, onSelect }: { nodes: MemoryNode[]; edges: MemoryEdge[]; selected: string; speaking: boolean; listening: boolean; onSelect: (id: string) => void }) {
+export default function MemoryScene({ nodes, edges, selected, voiceState, onSelect }: { nodes: MemoryNode[]; edges: MemoryEdge[]; selected: string; voiceState: "idle" | "listening" | "thinking" | "speaking"; onSelect: (id: string) => void }) {
   const positions = useMemo(() => new Map(nodes.map((node, index) => [node.id, [(node.x - 50) / 8, (50 - node.y) / 8, ((index % 3) - 1) * 0.9] as [number, number, number]])), [nodes]);
   const relationshipLevels = useMemo(() => new Map(nodes.map((node) => [node.id, edges.filter((edge) => edge.source === node.id || edge.target === node.id).length])), [nodes, edges]);
   const spaceDots = useMemo(() => {
@@ -30,26 +30,28 @@ export default function MemoryScene({ nodes, edges, selected, speaking, listenin
       <pointsMaterial size={0.035} color="#4a9290" transparent opacity={0.72} sizeAttenuation />
     </points>
     {edges.map((edge) => { const from = positions.get(edge.source); const to = positions.get(edge.target); const level = Math.max(1, Math.min(relationshipLevels.get(edge.source) ?? 1, 4)); return from && to ? <Line key={`${edge.source}-${edge.target}`} points={[from, to]} color={level > 2 ? "#52e5da" : level > 1 ? "#6e9695" : "#294e50"} transparent opacity={0.35 + level * 0.12} lineWidth={level * 0.55} dashed={level === 1} dashSize={0.16} gapSize={0.1} /> : null; })}
-    {nodes.map((node) => <MemoryNodeVisual key={node.id} node={node} position={positions.get(node.id) ?? [0, 0, 0]} level={relationshipLevels.get(node.id) ?? 0} active={selected === node.id || node.active === true} speaking={speaking} listening={listening} onSelect={onSelect} />)}
+    {nodes.map((node) => <MemoryNodeVisual key={node.id} node={node} position={positions.get(node.id) ?? [0, 0, 0]} level={relationshipLevels.get(node.id) ?? 0} active={selected === node.id || node.active === true} voiceState={voiceState} onSelect={onSelect} />)}
     <SceneControls selectedPosition={positions.get(selected)} />
   </Canvas>;
 }
 
-function MemoryNodeVisual({ node, position, level, active, speaking, listening, onSelect }: { node: MemoryNode; position: [number, number, number]; level: number; active: boolean; speaking: boolean; listening: boolean; onSelect: (id: string) => void }) {
+function MemoryNodeVisual({ node, position, level, active, voiceState, onSelect }: { node: MemoryNode; position: [number, number, number]; level: number; active: boolean; voiceState: "idle" | "listening" | "thinking" | "speaking"; onSelect: (id: string) => void }) {
   const groupRef = useRef<Group>(null);
   const isAgent = node.kind === "agent";
   const relationshipColor = level >= 3 ? "#52e5da" : level === 2 ? "#b8a3ff" : colors[node.kind] ?? colors.memory;
-  const color = isAgent && listening ? "#f2b66d" : relationshipColor;
+  const stateColor = voiceState === "listening" ? "#f2b66d" : voiceState === "thinking" ? "#b8a3ff" : voiceState === "speaking" ? "#c6ef78" : relationshipColor;
+  const color = isAgent ? stateColor : relationshipColor;
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return;
     const pulse = 1 + Math.sin(clock.getElapsedTime() * (1.1 + level * 0.45) + level) * (isAgent ? 0.025 : 0.045 + level * 0.008);
     groupRef.current.rotation.y += delta * (isAgent ? 0.2 : 0.07 + level * 0.025);
     groupRef.current.rotation.z = Math.sin(clock.getElapsedTime() * (isAgent ? 1.5 : 0.8)) * (isAgent ? 0.04 : 0.02);
-    groupRef.current.scale.setScalar((active ? 1.12 : 1) * pulse + (isAgent && (speaking || listening) ? Math.sin(clock.getElapsedTime() * (listening ? 9 : 14)) * (listening ? 0.08 : 0.11) : 0));
+    const statePulse = isAgent && voiceState !== "idle" ? Math.sin(clock.getElapsedTime() * (voiceState === "listening" ? 9 : voiceState === "thinking" ? 5 : 14)) * (voiceState === "thinking" ? 0.05 : 0.1) : 0;
+    groupRef.current.scale.setScalar((active ? 1.12 : 1) * pulse + statePulse);
   });
   useEffect(() => {
-    if (groupRef.current && !speaking && !listening) groupRef.current.scale.setScalar(active ? 1.12 : 1);
-  }, [active, speaking, listening]);
+    if (groupRef.current && voiceState === "idle") groupRef.current.scale.setScalar(active ? 1.12 : 1);
+  }, [active, voiceState]);
   const detail = isAgent ? 2 : Math.min(2, level);
   const knowledgeSize = 0.19 + Math.min(level, 4) * 0.025;
   return <group ref={groupRef} position={position} onClick={(event) => { event.stopPropagation(); onSelect(node.id); }}>

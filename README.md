@@ -79,6 +79,8 @@ The production build is warning-free after declaring Autoprefixer explicitly in 
 
 The graph renderer uses adaptive pixel density, high-performance WebGL, and reduced antialiasing to keep the animated scene responsive on mobile and lower-end machines. The focus button opens the current-view inspector without changing the selected node.
 
+Voice status is visible beside the function rail: `IDLE` is cyan, `LISTENING` is amber, `THINKING` is violet, and `SPEAKING` is lime. To test it, open CiscoAI in Chrome or Edge, allow microphone access, click the circular microphone button, wait for the amber `LISTENING` state, and speak. Your transcript should open CiscoAI Chat; the node then changes to violet while Ollama is thinking and lime while the browser reads the response aloud. Unsupported browsers and microphone permission failures are shown beside the rail.
+
 To install it, run the frontend, open `http://localhost:3000`, then use the browser menu: Chrome/Edge on Windows choose `Install CiscoAI`; Chrome on Android choose `Add to Home screen` or `Install app`. The backend must remain running locally for agent responses and memory updates.
 
 ### Start both services together

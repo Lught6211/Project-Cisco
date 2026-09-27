@@ -7,6 +7,11 @@
 .function-rail button { width: 42px; height: 42px; border: 1px solid #3a5b5a; border-radius: 50%; background: #102324; color: var(--cyan); display: grid; place-items: center; transition: color .2s, background .2s, transform .2s; }
 .function-rail button:hover { color: #071414; background: var(--cyan); transform: scale(1.08); }
 .function-rail button.voice-active { color: #071414; background: var(--amber); border-color: var(--amber); box-shadow: 0 0 22px rgba(242, 182, 109, .78); animation: voice-button-pulse 1s ease-in-out infinite; }
+.function-rail button.voice-listening, .voice-status.voice-listening { color: #071414; background: var(--amber); border-color: var(--amber); box-shadow: 0 0 22px rgba(242, 182, 109, .78); animation: voice-button-pulse 1s ease-in-out infinite; }
+.function-rail button.voice-thinking, .voice-status.voice-thinking { color: #071414; background: var(--violet); border-color: var(--violet); }
+.function-rail button.voice-speaking, .voice-status.voice-speaking { color: #071414; background: var(--lime); border-color: var(--lime); animation: voice-button-pulse 1.2s ease-in-out infinite; }
+.voice-status { position: fixed; z-index: 13; right: 78px; bottom: 20px; display: flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--line); color: var(--cyan); background: rgba(7, 18, 19, .75); font: 9px 'DM Mono'; letter-spacing: .08em; backdrop-filter: blur(10px); }
+.voice-status span { max-width: 260px; color: var(--ink); font-family: 'Manrope', sans-serif; letter-spacing: 0; }
 .chat-captions { max-height: 78px; overflow: auto; padding: 0 21px 8px; border-top: 1px solid var(--line); }
 .chat-captions p { margin: 8px 0 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
 .chat-captions p b { color: var(--cyan); font: 9px 'DM Mono'; margin-right: 8px; }
