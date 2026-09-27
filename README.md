@@ -63,9 +63,11 @@ https://your-public-host.example.com/api/telephony/voice
 
 The voice route starts a speech gather, and `/api/telephony/speech` sends the recognized text through CISCO and returns escaped TwiML. When `TWILIO_AUTH_TOKEN` is set, requests without a valid `X-Twilio-Signature` are rejected with `403`. For local development without credentials, the route accepts unsigned requests so the XML contract can be tested safely.
 
+For a realtime audio transport, set `TWILIO_STREAM_URL` to your public WebSocket URL and configure Twilio to use `/api/telephony/stream`. The WebSocket endpoint `/api/telephony/media-stream` tracks `start`, `media`, and `stop` events and counts received audio frames. It does not yet synthesize audio back to the caller; that is the next realtime model adapter.
+
 ## Next milestones
 
-1. Add Twilio media-stream streaming for low-latency bidirectional audio.
+1. Connect the media stream to a realtime speech model for bidirectional audio.
 2. Replace the JSON store with a graph/vector persistence layer and event streaming.
 3. Add authenticated WebSocket updates for graph, agent responses, and call state.
 4. Add a task planner that can turn approved directives into tool calls.

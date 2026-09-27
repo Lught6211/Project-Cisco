@@ -10,7 +10,7 @@ from typing import Literal
 from urllib.parse import parse_qs
 from xml.sax.saxutils import escape
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -66,6 +66,14 @@ class CallState(BaseModel):
     purpose: str
     provider: Literal["simulation", "twilio"]
     started_at: str
+
+
+class MediaStreamState(BaseModel):
+    stream_id: str
+    call_id: str
+    status: Literal["connected", "stopped"]
+    media_chunks: int = 0
+    audio_bytes: int = 0
 
 
 def seed_state() -> dict:
@@ -134,6 +142,7 @@ events = [
     Event(id="evt-3", type="system", title="CISCO online", detail="All local systems nominal", timestamp="5m ago"),
 ]
 calls: list[CallState] = []
+media_streams: dict[str, MediaStreamState] = {}
 agent = AgentRuntime()
 
 app = FastAPI(title="Project Cisco API", version="0.1.0")
@@ -204,6 +213,51 @@ async def twilio_voice_webhook(request: Request) -> Response:
     ))
     prompt = escape("CISCO is online. Tell me how I can help.")
     return twiml_response(f'<Gather input="speech" action="/api/telephony/speech" method="POST" speechTimeout="auto"><Say>{prompt}</Say></Gather><Say>I did not hear anything. Goodbye.</Say>')
+
+
+@app.post("/api/telephony/stream", responses={403: {"description": "Invalid Twilio signature"}})
+async def twilio_stream_webhook(request: Request) -> Response:
+    params = parse_twilio_form(await request.body())
+    require_twilio_signature(request, params)
+    stream_url = os.getenv("TWILIO_STREAM_URL", "wss://your-public-host.example.com/api/telephony/media-stream")
+    return twiml_response(f'<Connect><Stream url="{escape(stream_url)}" /></Connect>')
+
+
+@app.websocket("/api/telephony/media-stream")
+async def twilio_media_stream(websocket: WebSocket) -> None:
+    await websocket.accept()
+    stream_id = ""
+    try:
+        while True:
+            message = json.loads(await websocket.receive_text())
+            event_type = message.get("event")
+            if event_type == "start":
+                start = message.get("start", {})
+                stream_id = start.get("streamSid", secrets.token_hex(4))
+                media_streams[stream_id] = MediaStreamState(
+                    stream_id=stream_id,
+                    call_id=start.get("callSid", "unknown"),
+                    status="connected",
+                )
+            elif event_type == "media" and stream_id in media_streams:
+                payload = message.get("media", {}).get("payload", "")
+                media_streams[stream_id].media_chunks += 1
+                media_streams[stream_id].audio_bytes += len(payload) * 3 // 4
+            elif event_type == "stop" and stream_id in media_streams:
+                media_streams[stream_id].status = "stopped"
+                events.insert(0, Event(
+                    id=f"evt-{secrets.token_hex(4)}",
+                    type="call",
+                    title="Media stream stopped",
+                    detail=f"Received {media_streams[stream_id].media_chunks} audio chunks",
+                    timestamp=JUST_NOW,
+                ))
+                break
+    except WebSocketDisconnect:
+        if stream_id in media_streams:
+            media_streams[stream_id].status = "stopped"
+    except (json.JSONDecodeError, KeyError, TypeError):
+        await websocket.close(code=1003, reason="Invalid media stream message")
 
 
 @app.post("/api/telephony/speech", responses={403: {"description": "Invalid Twilio signature"}})
