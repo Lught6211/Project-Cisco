@@ -24,7 +24,7 @@ cd backend
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --host 0.0.0.0 --reload --port 8000
 ```
 
 ### Frontend
@@ -74,6 +74,18 @@ Use the dashboard directive box to ask a question. CISCO runs local-only by defa
 The dashboard is responsive and installable as a CiscoAI PWA on desktop and mobile browsers. The memory graph is a Three.js scene with JARVIS-style spatial dots: drag to orbit around nodes, pinch or scroll to zoom, and tap a node to focus it. A native packaged mobile app can be added later with the same API, but the current PWA requires no paid hosting or app-store account.
 
 To install it, run the frontend, open `http://localhost:3000`, then use the browser menu: Chrome/Edge on Windows choose `Install CiscoAI`; Chrome on Android choose `Add to Home screen` or `Install app`. The backend must remain running locally for agent responses and memory updates.
+
+### Start both services together
+
+You do not need to start two terminals manually. From the project root, run:
+
+```powershell
+.\start-ciscoai.ps1
+```
+
+This opens separate backend and frontend terminals and keeps both services running. On your Wi-Fi network, open `http://192.168.0.7:3000` from another device. Windows Firewall may ask permission for Python and Node; allow private networks. The frontend automatically sends API requests to the same computer’s port `8000`.
+
+The development CORS policy allows local-network browser access without credentials. Do not expose this development server directly to the public internet; production deployment should use HTTPS, authentication, and a restricted origin list.
 
 `localhost` is only the development address for the local server. After choosing `Install CiscoAI` in a supported browser, it opens as an application window. A public hosted deployment would use a domain instead of `localhost`; the free local-first setup intentionally keeps the backend on the same device.
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas } from "@react-three/fiber";
-import { Html, Line, OrbitControls } from "@react-three/drei";
+import { Line, OrbitControls } from "@react-three/drei";
 import { useMemo } from "react";
 
 type MemoryNode = { id: string; label: string; kind: string; x: number; y: number; active?: boolean };
@@ -29,7 +29,6 @@ export default function MemoryScene({ nodes, edges, selected, onSelect }: { node
     {nodes.map((node) => { const position = positions.get(node.id) ?? [0, 0, 0]; const active = selected === node.id || node.active; return <group key={node.id} position={position} onClick={(event) => { event.stopPropagation(); onSelect(node.id); }}>
       <mesh><sphereGeometry args={[active ? 0.34 : 0.22, 24, 24]} /><meshStandardMaterial color={colors[node.kind] ?? colors.memory} emissive={colors[node.kind] ?? colors.memory} emissiveIntensity={active ? 1.7 : 0.35} roughness={0.25} /></mesh>
       <mesh scale={active ? 1.45 : 1}><sphereGeometry args={[0.42, 24, 24]} /><meshBasicMaterial color={colors[node.kind] ?? colors.memory} transparent opacity={active ? 0.13 : 0.04} wireframe /></mesh>
-      <Html distanceFactor={10} position={[0.42, 0.12, 0]} style={{ pointerEvents: "none", whiteSpace: "nowrap" }}><span className="scene-label"><strong>{node.label}</strong><small>{node.kind}</small></span></Html>
     </group>; })}
     <OrbitControls enablePan enableZoom minDistance={4} maxDistance={16} makeDefault />
   </Canvas>;
