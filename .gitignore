@@ -1,0 +1,9 @@
+backend/.venv/
+backend/data/memory.json
+__pycache__/
+*.py[cod]
+frontend/node_modules/
+frontend/.next/
+.env
+.env.*
+!.env.example
