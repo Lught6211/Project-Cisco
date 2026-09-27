@@ -4,6 +4,7 @@ import { Canvas } from "@react-three/fiber";
 import { Line, OrbitControls, Text } from "@react-three/drei";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
+import { Vector3 } from "three";
 import type { Group } from "three";
 
 type MemoryNode = { id: string; label: string; kind: string; x: number; y: number; active?: boolean };
@@ -57,15 +58,22 @@ function MemoryNodeVisual({ node, position, active, onSelect }: { node: MemoryNo
 
 function SceneControls({ selectedPosition }: { selectedPosition?: [number, number, number] }) {
   const controlsRef = useRef<any>(null);
-  const lastTarget = useRef<string>("");
+  const focusTarget = useRef(new Vector3());
+  const focusPosition = useRef(new Vector3());
+  const focusing = useRef(false);
   useEffect(() => {
     if (!selectedPosition || !controlsRef.current) return;
-    const targetKey = selectedPosition.join(",");
-    if (targetKey === lastTarget.current) return;
-    lastTarget.current = targetKey;
-    controlsRef.current.target.set(...selectedPosition);
-    controlsRef.current.object.position.set(selectedPosition[0], selectedPosition[1], selectedPosition[2] + 3.8);
-    controlsRef.current.update();
+    focusTarget.current.set(...selectedPosition);
+    focusPosition.current.set(selectedPosition[0], selectedPosition[1], selectedPosition[2] + 3.8);
+    focusing.current = true;
   }, [selectedPosition]);
+  useFrame((_, delta) => {
+    if (!focusing.current || !controlsRef.current) return;
+    const easing = 1 - Math.pow(0.001, delta);
+    controlsRef.current.target.lerp(focusTarget.current, easing);
+    controlsRef.current.object.position.lerp(focusPosition.current, easing);
+    controlsRef.current.update();
+    if (controlsRef.current.object.position.distanceTo(focusPosition.current) < 0.04) focusing.current = false;
+  });
   return <OrbitControls ref={controlsRef} enablePan enableZoom zoomToCursor minDistance={2.5} maxDistance={22} enableDamping dampingFactor={0.08} minAzimuthAngle={-Infinity} maxAzimuthAngle={Infinity} makeDefault />;
 }

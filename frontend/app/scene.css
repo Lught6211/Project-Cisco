@@ -3,21 +3,29 @@
 .scene-label { display: grid; gap: 2px; color: var(--ink); text-shadow: 0 1px 8px #081011; font-size: 10px; }
 .scene-label small { color: var(--muted); font: 8px 'DM Mono'; text-transform: uppercase; }
 .selected-toggle { color: var(--cyan) !important; }
+.function-rail { position: fixed; z-index: 12; top: 50%; right: 0; transform: translateY(-50%); display: grid; gap: 9px; padding: 10px 8px 10px 10px; background: rgba(10, 23, 24, .88); border: 1px solid var(--line); border-right: 0; border-radius: 14px 0 0 14px; backdrop-filter: blur(12px); }
+.function-rail button { width: 42px; height: 42px; border: 1px solid #3a5b5a; border-radius: 50%; background: #102324; color: var(--cyan); display: grid; place-items: center; transition: color .2s, background .2s, transform .2s; }
+.function-rail button:hover { color: #071414; background: var(--cyan); transform: scale(1.08); }
+.chat-captions { max-height: 78px; overflow: auto; padding: 0 21px 8px; border-top: 1px solid var(--line); }
+.chat-captions p { margin: 8px 0 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
+.chat-captions p b { color: var(--cyan); font: 9px 'DM Mono'; margin-right: 8px; }
+.chat-captions p.cisco { color: var(--ink); }
 
 @media (min-width: 801px) {
 	html, body { height: 100%; overflow: hidden; }
-	.app-shell { height: 100vh; overflow: hidden; padding-bottom: 14px; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+	.app-shell { height: 100vh; overflow: hidden; padding-bottom: 10px; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
 	.intro { padding: 30px 0 20px; }
 	.metric { padding-top: 12px; padding-bottom: 12px; }
-	.workspace-grid { min-height: 0; display: block; position: relative; }
-	.graph-panel { min-height: 0; display: flex; flex-direction: column; }
-	.graph-canvas { flex: 1; height: auto; min-height: 210px; }
+	.workspace-grid { min-height: 0; display: block; position: relative; height: calc(100vh - 198px); }
+	.graph-panel { min-height: 0; height: 100%; display: flex; flex-direction: column; }
+	.graph-canvas { flex: 1; height: auto; min-height: 360px; }
 	.side-stack { min-height: 0; grid-template-rows: 1fr 1fr; position: absolute; z-index: 5; top: 18px; right: 0; width: 304px; transform: translateX(calc(100% - 38px)); transition: transform .28s ease; }
 	.side-stack:hover { transform: translateX(0); }
 	.side-stack::before { content: 'FOCUS / VOICE'; position: absolute; left: -38px; top: 28px; width: 38px; height: 122px; writing-mode: vertical-rl; text-align: center; padding: 12px 8px; color: var(--cyan); background: #101f20; border: 1px solid var(--line); font: 9px 'DM Mono'; letter-spacing: .1em; }
 	.focus-panel, .call-panel { min-height: 0; }
 	.lower-grid { position: fixed; z-index: 6; left: 50%; bottom: 0; width: min(900px, calc(100% - 48px)); margin: 0; min-height: 0; transform: translate(-50%, calc(100% - 28px)); transition: transform .28s ease; }
 	.lower-grid:hover { transform: translate(-50%, 0); }
+	.lower-grid.drawer-open { transform: translate(-50%, 0); }
 	.lower-grid::before { content: 'ACTIVITY / DIRECTIVE'; position: absolute; left: 50%; top: -28px; transform: translateX(-50%); height: 28px; padding: 8px 18px; color: var(--cyan); background: #101f20; border: 1px solid var(--line); font: 9px 'DM Mono'; letter-spacing: .1em; }
 	.activity-panel, .prompt-panel { min-height: 0; }
 	.activity-item { padding-top: 9px; padding-bottom: 9px; }
