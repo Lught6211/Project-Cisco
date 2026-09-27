@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Billboard, Html, Line, OrbitControls, Text } from "@react-three/drei";
+import { Billboard, Line, OrbitControls, Text } from "@react-three/drei";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Group, Mesh } from "three";
@@ -179,30 +179,6 @@ function AdvancedNodeVisual({ node, position, level, active, voiceState, onSelec
           {`// ${node.kind.toUpperCase()}`}
         </Text>
       </Billboard>
-
-      {active && (
-        <Html distanceFactor={10} position={[isAgent ? 1.3 : 0.85, -0.4, 0]}>
-          <div style={{
-            width: "210px",
-            padding: "10px 14px",
-            background: "rgba(3, 7, 18, 0.92)",
-            border: `1px solid ${color}`,
-            borderRadius: "6px",
-            color: "#ffffff",
-            fontFamily: "monospace",
-            boxShadow: `0 0 20px ${color}55`,
-            pointerEvents: "none"
-          }}>
-            <div style={{ fontSize: "9px", color, letterSpacing: "1px", marginBottom: "3px" }}>NODE_INSPECT // {node.kind.toUpperCase()}</div>
-            <div style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "4px" }}>{node.label}</div>
-            <div style={{ fontSize: "10px", color: "#94a3b8", marginBottom: "8px", lineHeight: "1.3" }}>{node.detail || "Active node in CISCO graph."}</div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", borderTop: "1px dashed rgba(255,255,255,0.15)", paddingTop: "6px" }}>
-              <span>STATUS: <strong style={{ color: "#10b981" }}>ONLINE</strong></span>
-              <span>LINK: <strong style={{ color }}>98.4%</strong></span>
-            </div>
-          </div>
-        </Html>
-      )}
     </group>
   );
 }
