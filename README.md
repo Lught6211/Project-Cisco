@@ -53,7 +53,7 @@ Install Ollama from https://ollama.com, then download the recommended local mode
 ollama pull llama3.2
 ```
 
-Copy `backend/.env.example` to `backend/.env`. The included values point CISCO at Ollama, so no paid API key is needed. Start Ollama before the backend.
+Copy `backend/.env.example` to `backend/.env`. The included values point CISCO at Ollama, so no paid API key is needed. The workspace is configured to load this file into Python terminals automatically. Start Ollama before the backend.
 
 To send an agent directive:
 
