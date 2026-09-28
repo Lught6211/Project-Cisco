@@ -2,7 +2,8 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Billboard, Line, OrbitControls, Text } from "@react-three/drei";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import * as THREE from "three";
 import type { Group, Mesh } from "three";
 
@@ -136,6 +137,21 @@ export default function MemoryScene({
     return { positions, parentByNode };
   }, [safeNodes, safeEdges]);
   const { positions, parentByNode } = layout;
+  const knownNodeIds = useRef(new Set(safeNodes.map((node) => node.id)));
+  const [spawnOrigins, setSpawnOrigins] = useState<Map<string, [number, number, number]>>(() => new Map());
+
+  useEffect(() => {
+    const additions = new Map<string, [number, number, number]>();
+    for (const node of safeNodes) {
+      if (knownNodeIds.current.has(node.id)) continue;
+      const parent = parentByNode.get(node.id);
+      additions.set(node.id, parent ? positions.get(parent) ?? [0, 0, 0] : [0, 0, 0]);
+      knownNodeIds.current.add(node.id);
+    }
+    if (additions.size) {
+      setSpawnOrigins((previous) => new Map([...previous, ...additions]));
+    }
+  }, [safeNodes, positions, parentByNode]);
 
   const relationshipLevels = useMemo(() => new Map(safeNodes.map((node) => [
     node.id, 
@@ -162,40 +178,52 @@ export default function MemoryScene({
 
       <VectorSpaceGrid extent={spaceExtent} voiceState={voiceState} speechLevel={speechLevel} />
 
-      {/* Vector Laser Connection Lines */}
-      {safeEdges.map((edge) => {
-        const from = positions.get(edge.source);
-        const to = positions.get(edge.target);
-        return from && to ? (
-          <group key={`${edge.source}-${edge.target}`}>
+      <OrbitalDrift>
+        {/* Parent links glow clearly; secondary relationships stay in the background. */}
+        {safeEdges.map((edge) => {
+          const from = positions.get(edge.source);
+          const to = positions.get(edge.target);
+          const parentLink = parentByNode.get(edge.source) === edge.target || parentByNode.get(edge.target) === edge.source;
+          return from && to ? (
             <Line
+              key={`${edge.source}-${edge.target}`}
               points={[from, to]}
-              color="#52e5da"
+              color={parentLink ? "#52e5da" : "#368d91"}
               transparent
-              opacity={parentByNode.get(edge.source) === edge.target || parentByNode.get(edge.target) === edge.source ? 0.42 : 0.09}
-              lineWidth={parentByNode.get(edge.source) === edge.target || parentByNode.get(edge.target) === edge.source ? 1.2 : 0.6}
+              opacity={parentLink ? 0.42 : 0.09}
+              lineWidth={parentLink ? 1.2 : 0.6}
             />
-          </group>
-        ) : null;
-      })}
+          ) : null;
+        })}
 
-      {/* High-Poly Nodes */}
-      {safeNodes.map((node) => (
-        <JarvisNodeVisual
-          key={node.id}
-          node={node}
-          position={positions.get(node.id) ?? [0, 0, 0]}
-          level={relationshipLevels.get(node.id) ?? 1}
-          active={selected === node.id || node.active === true}
-          voiceState={voiceState}
-          speechLevel={speechLevel}
-          onSelect={onSelect}
-        />
-      ))}
+        {safeNodes.map((node) => (
+          <JarvisNodeVisual
+            key={node.id}
+            node={node}
+            position={positions.get(node.id) ?? [0, 0, 0]}
+            spawnFrom={spawnOrigins.get(node.id)}
+            level={relationshipLevels.get(node.id) ?? 1}
+            active={selected === node.id || node.active === true}
+            voiceState={voiceState}
+            speechLevel={speechLevel}
+            onSelect={onSelect}
+          />
+        ))}
+      </OrbitalDrift>
 
       <SceneControls selectedId={selected} selectedPosition={positions.get(selected)} />
     </Canvas>
   );
+}
+
+function OrbitalDrift({ children }: { children: ReactNode }) {
+  const ref = useRef<Group>(null);
+  useFrame((_, delta) => {
+    if (!ref.current) return;
+    ref.current.rotation.y += delta * 0.012;
+    ref.current.rotation.z += delta * 0.002;
+  });
+  return <group ref={ref}>{children}</group>;
 }
 
 function VectorSpaceGrid({ extent, voiceState, speechLevel }: { extent: number; voiceState: string; speechLevel: number }) {
@@ -290,6 +318,7 @@ function AudioWaveform({ color, voiceState, speechLevel }: { color: string; voic
 function JarvisNodeVisual({ 
   node, 
   position, 
+  spawnFrom,
   level, 
   active, 
   voiceState, 
@@ -298,6 +327,7 @@ function JarvisNodeVisual({
 }: { 
   node: MemoryNode; 
   position: [number, number, number]; 
+  spawnFrom?: [number, number, number];
   level: number; 
   active: boolean; 
   voiceState: "idle" | "listening" | "thinking" | "speaking"; 
@@ -307,6 +337,12 @@ function JarvisNodeVisual({
   const groupRef = useRef<Group>(null);
   const ring1Ref = useRef<Mesh>(null);
   const ring2Ref = useRef<Mesh>(null);
+  const spawnProgress = useRef<number | null>(null);
+  const spawnOrbRef = useRef<Group>(null);
+
+  useEffect(() => {
+    if (spawnFrom) spawnProgress.current = 0;
+  }, [spawnFrom]);
   
   const isAgent = node.kind === "agent";
   const color = isAgent 
@@ -317,6 +353,29 @@ function JarvisNodeVisual({
     if (!groupRef.current) return;
     const time = clock.getElapsedTime();
 
+    if (spawnProgress.current !== null) {
+      spawnProgress.current = Math.min(1, spawnProgress.current + delta / 0.95);
+      const t = spawnProgress.current;
+      const eased = 1 - (1 - t) * (1 - t);
+      if (groupRef.current && spawnFrom) {
+        groupRef.current.position.set(
+          THREE.MathUtils.lerp(spawnFrom[0], position[0], eased),
+          THREE.MathUtils.lerp(spawnFrom[1], position[1], eased),
+          THREE.MathUtils.lerp(spawnFrom[2], position[2], eased),
+        );
+      }
+      if (spawnOrbRef.current && spawnFrom) {
+        spawnOrbRef.current.position.set(
+          THREE.MathUtils.lerp(spawnFrom[0], position[0], Math.min(1, t * 1.12)),
+          THREE.MathUtils.lerp(spawnFrom[1], position[1], Math.min(1, t * 1.12)),
+          THREE.MathUtils.lerp(spawnFrom[2], position[2], Math.min(1, t * 1.12)),
+        );
+        const orbScale = t < 0.78 ? 1 : Math.max(0, (1 - t) / 0.22);
+        spawnOrbRef.current.scale.setScalar(orbScale);
+      }
+      if (t >= 1) spawnProgress.current = null;
+    }
+
     groupRef.current.rotation.y += delta * (isAgent ? 0.35 : 0.12);
     if (ring1Ref.current) ring1Ref.current.rotation.x += delta * (isAgent ? 0.5 : 0.2);
     if (ring2Ref.current) ring2Ref.current.rotation.z -= delta * (isAgent ? 0.7 : 0.3);
@@ -325,10 +384,12 @@ function JarvisNodeVisual({
       ? voiceState === "speaking" ? speechLevel * 0.16 : Math.sin(time * (voiceState === "listening" ? 8 : 2)) * 0.035
       : Math.sin(time * 1.2 + level) * 0.018;
       
-    groupRef.current.scale.setScalar((active ? 1.22 : 1.0) + pulse);
+    const spawnScale = spawnProgress.current === null ? 1 : Math.max(0.02, 1 - (1 - spawnProgress.current) ** 2);
+    groupRef.current.scale.setScalar(((active ? 1.22 : 1.0) + pulse) * spawnScale);
   });
 
   return (
+    <>
     <group ref={groupRef} position={position} onClick={(e) => { e.stopPropagation(); onSelect(node.id); }}>
       {isAgent ? (
         /* CISCO CORE: Ultra-High Poly Smooth Sphere (64x64 segments) + 48x48 Wireframe Sphere */
@@ -401,6 +462,19 @@ function JarvisNodeVisual({
         </Text>
       </Billboard>
     </group>
+    {spawnFrom && (
+      <group ref={spawnOrbRef} position={spawnFrom}>
+        <mesh>
+          <sphereGeometry args={[0.065, 20, 20]} />
+          <meshBasicMaterial color={color} transparent opacity={0.92} />
+        </mesh>
+        <mesh>
+          <sphereGeometry args={[0.14, 16, 16]} />
+          <meshBasicMaterial color={color} transparent opacity={0.22} depthWrite={false} />
+        </mesh>
+      </group>
+    )}
+    </>
   );
 }
 
