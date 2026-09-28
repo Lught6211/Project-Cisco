@@ -1,9 +1,9 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Billboard, Line, OrbitControls, Text } from "@react-three/drei";
+import { Billboard, Html, Line, OrbitControls, Text } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode, RefObject } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 import * as THREE from "three";
 import type { Group, Mesh } from "three";
 
@@ -13,7 +13,8 @@ type MemoryNode = {
   kind: string; 
   x: number; 
   y: number; 
-  confidence?: string; 
+  confidence?: number;
+  relationship_count?: number;
   detail?: string; 
   active?: boolean 
 };
@@ -478,20 +479,15 @@ function JarvisNodeVisual({
             {`// ${node.kind.toUpperCase()}`}
           </Text>
         </Billboard>
-      ) : (focused || hovered) ? (
-        <Billboard follow position={[0, 0.52, 0]}>
-          <mesh position={[0, -0.005, -0.015]}>
-            <planeGeometry args={[Math.min(2.8, Math.max(1.2, node.label.length * 0.085 + 0.32)), 0.42]} />
-            <meshBasicMaterial color="#071314" transparent opacity={0.92} depthWrite={false} />
-          </mesh>
-          <Text position={[0, 0.055, 0.01]} fontSize={0.13} color="#f3ffff" anchorX="center" anchorY="middle" outlineWidth={0.01} outlineColor="#071011">
-            {node.label}
-          </Text>
-          <Text position={[0, -0.105, 0.01]} fontSize={0.07} color={color} anchorX="center" anchorY="middle" letterSpacing={0.1}>
-            {`// ${node.kind.toUpperCase()}`}
-          </Text>
-        </Billboard>
-      ) : null}
+      ) : (
+        <Html position={[0, 0.55, 0]} center distanceFactor={9} zIndexRange={focused ? [30, 0] : [10, 0]}>
+          <div className={`node-label-tag${focused ? " selected" : ""}`} style={{ "--node-accent": color } as CSSProperties}>
+            <i />
+            <span>{node.label}</span>
+            {focused && <small>{node.kind}</small>}
+          </div>
+        </Html>
+      )}
     </group>
     {spawnFrom && (
       <group ref={spawnOrbRef} position={spawnFrom}>

@@ -8,7 +8,7 @@ const MemoryScene = dynamic(() => import("./MemoryScene"), { ssr: false });
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || "https://cisco-backend-yve2.onrender.com").replace(/\/+$/, "");
 
-type Node = { id: string; label: string; kind: string; x: number; y: number; confidence?: string; detail?: string; active?: boolean };
+type Node = { id: string; label: string; kind: string; x: number; y: number; confidence?: number; relationship_count?: number; detail?: string; active?: boolean };
 type Edge = { source: string; target: string; label: string };
 type EventItem = { id: string; type: string; title: string; detail: string; timestamp: string };
 type CaptionItem = { id: string; sender: "USER" | "CISCO"; text: string; time: string };
@@ -16,11 +16,11 @@ type ConversationTurn = { role: "user" | "assistant"; content: string };
 
 export default function Home() {
   const [nodes, setNodes] = useState<Node[]>([
-    { id: "cisco", label: "CISCO", kind: "agent", confidence: "99.8%", detail: "Autonomous voice agent core runtime", x: 50, y: 48, active: true },
-    { id: "maya", label: "Maya Chen", kind: "person", confidence: "96.5%", detail: "Primary operator identity profile", x: 20, y: 27 },
-    { id: "table-12", label: "Table 12", kind: "place", confidence: "88.4%", detail: "Preferred location coordinate", x: 79, y: 26 },
-    { id: "reservation", label: "Reservation", kind: "task", confidence: "94.2%", detail: "Active calendar task directive", x: 78, y: 73 },
-    { id: "ramen", label: "Ramen Kaito", kind: "memory", confidence: "91.0%", detail: "Historical memory entry #8492", x: 20, y: 74 },
+    { id: "cisco", label: "CISCO", kind: "agent", detail: "Autonomous voice agent core runtime", x: 50, y: 48, active: true },
+    { id: "maya", label: "Maya Chen", kind: "person", detail: "Primary operator identity profile", x: 20, y: 27 },
+    { id: "table-12", label: "Table 12", kind: "place", detail: "Preferred location coordinate", x: 79, y: 26 },
+    { id: "reservation", label: "Reservation", kind: "task", detail: "Active calendar task directive", x: 78, y: 73 },
+    { id: "ramen", label: "Ramen Kaito", kind: "memory", detail: "Historical memory entry #8492", x: 20, y: 74 },
   ]);
 
   const [edges, setEdges] = useState<Edge[]>([
@@ -59,14 +59,24 @@ export default function Home() {
   // Draggable Window Positions
   const [chatPos, setChatPos] = useState({ x: 70, y: 472 });
   const [telemetryPos, setTelemetryPos] = useState({ x: 70, y: 152 });
-  const [focusPos, setFocusPos] = useState({ x: 860, y: 120 });
+  const [focusPos, setFocusPos] = useState({ x: 0, y: 112 });
 
   useEffect(() => {
     if (window.innerWidth <= 900) {
       setTelemetryPos({ x: 16, y: 98 });
-      setFocusPos({ x: 16, y: 340 });
+      setFocusPos({ x: 16, y: 98 });
       setChatPos({ x: 16, y: 570 });
     }
+  }, []);
+
+  useEffect(() => {
+    const placeInspector = () => {
+      if (window.innerWidth > 900) setFocusPos({ x: Math.max(16, window.innerWidth - 342), y: 112 });
+      else setFocusPos((position) => ({ ...position, x: 16 }));
+    };
+    placeInspector();
+    window.addEventListener("resize", placeInspector);
+    return () => window.removeEventListener("resize", placeInspector);
   }, []);
 
   useEffect(() => {
@@ -89,11 +99,30 @@ export default function Home() {
   }, []);
 
   const selectedNode = nodes.find((n) => n.id === selectedId) || nodes[0];
-  const nodeRelationships = edges.filter((e) => e.source === selectedId || e.target === selectedId).length;
+  const outgoing = new Map<string, string[]>();
+  const incoming = new Map<string, Set<string>>();
+  const nodeKinds = new Map(nodes.map((node) => [node.id, node.kind]));
+  edges.forEach((edge) => {
+    outgoing.set(edge.source, [...(outgoing.get(edge.source) || []), edge.target]);
+    if (!incoming.has(edge.target)) incoming.set(edge.target, new Set());
+    incoming.get(edge.target)?.add(edge.source);
+  });
+  const nodeRelationships = selectedId === "cisco"
+    ? nodes.length
+    : (() => {
+        const visited = new Set<string>();
+        const pending = [...(outgoing.get(selectedId) || [])];
+        while (pending.length) {
+          const id = pending.pop()!;
+          if (visited.has(id) || nodeKinds.get(id) === "agent") continue;
+          visited.add(id);
+          pending.push(...(outgoing.get(id) || []));
+        }
+        return visited.size + (incoming.get(selectedId)?.size ? 1 : 0);
+      })();
 
   const selectNode = (id: string) => {
     setSelectedId(id);
-    setOpenPanels((prev) => ({ ...prev, focus: true }));
   };
 
   const toggleMic = () => {
@@ -211,7 +240,6 @@ export default function Home() {
       speakReply(data.answer);
       if (typeof data.memory_node_id === "string") {
         setSelectedId(data.memory_node_id);
-        setOpenPanels((prev) => ({ ...prev, focus: true }));
         void fetch(`${API_URL}/api/graph`).then(async (graphRes) => {
           if (!graphRes.ok) return;
           const graph = await graphRes.json();
@@ -351,7 +379,7 @@ export default function Home() {
 
       {/* 2. Focus Node Inspection Window */}
       {openPanels.focus && (
-        <div className="hud-panel focus-panel draggable-panel" style={{ top: `${focusPos.y}px`, left: `${focusPos.x}px` }}>
+          <div className="hud-panel focus-panel draggable-panel" style={{ top: `${focusPos.y}px`, left: `${focusPos.x}px` }}>
           <div className="hud-corner top-left" />
           <div className="hud-corner top-right" />
           <div className="hud-corner bottom-left" />
@@ -381,12 +409,12 @@ export default function Home() {
                 <span className="stat-val cyan">{selectedNode.kind.toUpperCase()}</span>
               </div>
               <div>
-                <span className="stat-label">CONFIDENCE</span>
-                <span className="stat-val green">{selectedNode.confidence || "94.2%"}</span>
+                <span className="stat-label" title="Evidence score uses the amount of descriptive detail and linked source material. It is not an AI certainty claim.">CONFIDENCE</span>
+                <span className="stat-val green">{`${Math.round((selectedNode.confidence ?? 0.5) * 100)}%`}</span>
               </div>
               <div>
                 <span className="stat-label">RELATIONSHIPS</span>
-                <span className="stat-val cyan">{nodeRelationships}</span>
+                <span className="stat-val cyan">{selectedNode.relationship_count ?? nodeRelationships}</span>
               </div>
             </div>
           </div>

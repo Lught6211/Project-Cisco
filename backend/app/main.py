@@ -32,6 +32,8 @@ class GraphNode(BaseModel):
     x: float = 0
     y: float = 0
     active: bool = False
+    confidence: float = 0.5
+    relationship_count: int = 0
 
 
 class GraphEdge(BaseModel):
@@ -175,7 +177,43 @@ def health() -> dict[str, str]:
 
 @app.get("/api/graph")
 def get_graph() -> GraphState:
-    return state
+    nodes_by_id = {node.id: node for node in state.nodes}
+    children: dict[str, set[str]] = {node.id: set() for node in state.nodes}
+    parents: dict[str, set[str]] = {node.id: set() for node in state.nodes}
+    evidence: dict[str, int] = {node.id: 0 for node in state.nodes}
+    for edge in state.edges:
+        if edge.source in children and edge.target in nodes_by_id:
+            children[edge.source].add(edge.target)
+            parents[edge.target].add(edge.source)
+            if edge.label.lower() in {"supported by", "source"}:
+                evidence[edge.source] = evidence.get(edge.source, 0) + 1
+
+    reach: dict[str, int] = {}
+    for node in state.nodes:
+        visited: set[str] = set()
+        pending = list(children.get(node.id, ()))
+        while pending:
+            related_id = pending.pop()
+            related = nodes_by_id.get(related_id)
+            if related_id in visited or related is None or related.kind == "agent":
+                continue
+            visited.add(related_id)
+            pending.extend(children.get(related_id, ()))
+        reach[node.id] = len(visited) + (1 if parents.get(node.id) else 0)
+
+    # CISCO's relationship figure reflects the whole reachable graph and is
+    # deliberately one greater than any individual branch score.
+    reach["cisco"] = max(len(state.nodes), max((v for k, v in reach.items() if k != "cisco"), default=0) + 1)
+    scored_nodes = []
+    for node in state.nodes:
+        description_strength = min(len(node.detail.strip()) / 240, 1.0)
+        source_strength = min(evidence.get(node.id, 0) / 3, 1.0)
+        score = 0.45 + 0.30 * description_strength + 0.25 * source_strength
+        scored_nodes.append(node.model_copy(update={
+            "confidence": round(score, 2),
+            "relationship_count": reach.get(node.id, 0),
+        }))
+    return GraphState(nodes=scored_nodes, edges=state.edges, updated_at=state.updated_at)
 
 
 @app.get("/api/events")
