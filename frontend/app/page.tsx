@@ -32,7 +32,7 @@ export default function Home() {
   const [events, setEvents] = useState<EventItem[]>([
     { id: "evt-1", type: "call", title: "Call simulation ready", detail: "Outbound voice channel is standing by", timestamp: "now" },
     { id: "evt-2", type: "memory", title: "Memory graph hydrated", detail: "5 nodes connected from local context", timestamp: "2m ago" },
-    { id: "evt-3", type: "system", title="CISCO online", detail="All local systems nominal", timestamp="5m ago" },
+    { id: "evt-3", type: "system", title: "CISCO online", detail: "All local systems nominal", timestamp: "5m ago" },
   ]);
 
   const [selectedId, setSelectedId] = useState<string>("cisco");
