@@ -8,17 +8,17 @@ const MemoryScene = dynamic(() => import("./MemoryScene"), { ssr: false });
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://cisco-backend-yve2.onrender.com";
 
-type Node = { id: string; label: string; kind: string; x: number; y: number; detail?: string; active?: boolean };
+type Node = { id: string; label: string; kind: string; x: number; y: number; confidence?: string; detail?: string; active?: boolean };
 type Edge = { source: string; target: string; label: string };
 type EventItem = { id: string; type: string; title: string; detail: string; timestamp: string };
 
 export default function Home() {
   const [nodes, setNodes] = useState<Node[]>([
-    { id: "cisco", label: "CISCO", kind: "agent", detail: "Autonomous voice agent core", x: 50, y: 48, active: true },
-    { id: "maya", label: "Maya Chen", kind: "person", detail: "Primary operator", x: 20, y: 27 },
-    { id: "table-12", label: "Table 12", kind: "place", detail: "Preferred location coordinate", x: 79, y: 26 },
-    { id: "reservation", label: "Reservation", kind: "task", detail: "Active task directive", x: 78, y: 73 },
-    { id: "ramen", label: "Ramen Kaito", kind: "memory", detail: "Memory entry #8492", x: 20, y: 74 },
+    { id: "cisco", label: "CISCO", kind: "agent", confidence: "99.8%", detail: "Autonomous voice agent core", x: 50, y: 48, active: true },
+    { id: "maya", label: "Maya Chen", kind: "person", confidence: "96.5%", detail: "Primary operator identity profile", x: 20, y: 27 },
+    { id: "table-12", label: "Table 12", kind: "place", confidence: "88.4%", detail: "Preferred location coordinate", x: 79, y: 26 },
+    { id: "reservation", label: "Reservation", kind: "task", confidence: "94.2%", detail: "Active calendar task directive", x: 78, y: 73 },
+    { id: "ramen", label: "Ramen Kaito", kind: "memory", confidence: "91.0%", detail: "Historical memory entry #8492", x: 20, y: 74 },
   ]);
 
   const [edges, setEdges] = useState<Edge[]>([
@@ -41,7 +41,6 @@ export default function Home() {
   const [isSending, setIsSending] = useState(false);
   const [activePanel, setActivePanel] = useState<"chat" | "telemetry" | "focus" | null>(null);
 
-  // Draggable Window Coordinates
   const [chatPos, setChatPos] = useState({ x: 24, y: 120 });
   const [telemetryPos, setTelemetryPos] = useState({ x: 24, y: 120 });
   const [focusPos, setFocusPos] = useState({ x: 24, y: 120 });
@@ -100,7 +99,6 @@ export default function Home() {
     }
   };
 
-  // Drag Handler for Floating HUD Panels
   const makeDraggable = (setter: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>) => {
     return (e: React.MouseEvent) => {
       const startX = e.clientX;
@@ -124,7 +122,6 @@ export default function Home() {
 
   return (
     <div className="cisco-container">
-      {/* Full-Screen 3D Background Canvas Layer */}
       <div className="canvas-layer">
         <MemoryScene
           nodes={nodes}
@@ -135,7 +132,6 @@ export default function Home() {
         />
       </div>
 
-      {/* Top Header Bar */}
       <header className="top-bar">
         <div className="brand flex items-center gap-3">
           <div className="logo-box">
@@ -167,7 +163,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Subheader Overlay */}
       <div className="subheader-overlay">
         <div className="eyebrow">LIVE MEMORY GRAPH / SPATIAL CORE</div>
         <h2 className="section-title">Context topology / 3D</h2>
@@ -175,9 +170,7 @@ export default function Home() {
 
       <div className="orbital-badge">⊙ ORBITAL</div>
 
-      {/* TOGGLEABLE & DRAGGABLE FLOATING HUD PANELS */}
-
-      {/* 1. Focus Node Panel */}
+      {/* Focus Node Panel */}
       {activePanel === "focus" && (
         <div className="hud-panel draggable-panel" style={{ top: `${focusPos.y}px`, left: `${focusPos.x}px` }}>
           <div className="hud-header" onMouseDown={makeDraggable(setFocusPos)}>
@@ -199,7 +192,7 @@ export default function Home() {
               </div>
               <div>
                 <span className="stat-label">CONFIDENCE</span>
-                <span className="stat-val green">94.2%</span>
+                <span className="stat-val green">{selectedNode.confidence || "92.0%"}</span>
               </div>
               <div>
                 <span className="stat-label">RELATIONSHIPS</span>
@@ -210,7 +203,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* 2. Telemetry Log Panel */}
+      {/* Telemetry Log Panel */}
       {activePanel === "telemetry" && (
         <div className="hud-panel draggable-panel" style={{ top: `${telemetryPos.y}px`, left: `${telemetryPos.x}px` }}>
           <div className="hud-header" onMouseDown={makeDraggable(setTelemetryPos)}>
@@ -229,7 +222,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* 3. Floating Chat Directive Panel */}
+      {/* Floating Chat Panel */}
       {activePanel === "chat" && (
         <div className="hud-panel draggable-panel" style={{ top: `${chatPos.y}px`, left: `${chatPos.x}px` }}>
           <div className="hud-header" onMouseDown={makeDraggable(setChatPos)}>
@@ -250,7 +243,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Right Floating Action Rail */}
+      {/* Floating Dock Rail */}
       <div className="right-dock">
         <button
           title="Focus Node"
@@ -295,7 +288,6 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Bottom Footer Bar */}
       <footer className="bottom-bar">
         <div className="legend">
           <span className="legend-item"><span className="dot cyan" /> ACTIVE CONTEXT</span>
