@@ -351,6 +351,7 @@ function JarvisNodeVisual({
   onSelect: (id: string) => void 
 }) {
   const groupRef = useRef<Group>(null);
+  const glitchGhostRef = useRef<Group>(null);
   const ring1Ref = useRef<Mesh>(null);
   const ring2Ref = useRef<Mesh>(null);
   const spawnProgress = useRef<number | null>(null);
@@ -370,13 +371,28 @@ function JarvisNodeVisual({
     if (!groupRef.current) return;
     const time = clock.getElapsedTime();
 
+    const glitchCycle = Math.floor(time / 4.7);
+    const glitchPhase = time % 4.7;
+    const glitchSeed = Math.abs(Math.sin(glitchCycle * 91.713) * 43758.5453) % 1;
+    const glitchStart = 1.4 + glitchSeed * 2.7;
+    const glitching = ultronMode && isAgent && (
+      (glitchPhase >= glitchStart && glitchPhase < glitchStart + 0.12) ||
+      (glitchPhase >= glitchStart + 0.19 && glitchPhase < glitchStart + 0.25)
+    );
+
     if (isAgent && ultronMode && spawnProgress.current === null) {
-      const twitch = Math.sin(time * 43) * 0.024 + Math.sin(time * 79) * 0.012;
-      groupRef.current.position.set(position[0] + twitch, position[1] + Math.cos(time * 61) * 0.018, position[2]);
-      groupRef.current.visible = Math.sin(time * 31) + Math.sin(time * 57) < 1.82;
+      const twitch = glitching ? Math.sin(time * 89) * 0.1 : 0;
+      groupRef.current.position.set(position[0] + twitch, position[1] + (glitching ? Math.cos(time * 73) * 0.055 : 0), position[2]);
+      groupRef.current.visible = !glitching || Math.sin(time * 103) > -0.7;
+      if (glitchGhostRef.current) {
+        glitchGhostRef.current.visible = glitching;
+        glitchGhostRef.current.position.set(Math.sin(time * 83) * 0.18, Math.cos(time * 71) * 0.08, 0.025);
+        glitchGhostRef.current.rotation.z = Math.sin(time * 37) * 0.06;
+      }
     } else if (isAgent && !ultronMode) {
       groupRef.current.position.set(...position);
       groupRef.current.visible = true;
+      if (glitchGhostRef.current) glitchGhostRef.current.visible = false;
     }
 
     if (spawnProgress.current !== null) {
@@ -407,7 +423,7 @@ function JarvisNodeVisual({
     if (ring2Ref.current) ring2Ref.current.rotation.z -= delta * (isAgent ? 0.7 : 0.3);
 
     const pulse = isAgent
-      ? ultronMode ? Math.sin(time * 24) * 0.22 : voiceState === "speaking" ? speechLevel * 0.16 : Math.sin(time * (voiceState === "listening" ? 8 : 2)) * 0.035
+      ? voiceState === "speaking" ? speechLevel * 0.16 : Math.sin(time * (voiceState === "listening" ? 8 : 2)) * 0.035
       : Math.sin(time * 1.2 + level) * 0.018;
       
     const spawnScale = spawnProgress.current === null ? 1 : Math.max(0.02, 1 - (1 - spawnProgress.current) ** 2);
@@ -434,6 +450,18 @@ function JarvisNodeVisual({
             <sphereGeometry args={[0.82, 48, 48]} />
             <meshBasicMaterial color={color} wireframe transparent opacity={0.35} />
           </mesh>
+          {ultronMode && (
+            <group ref={glitchGhostRef} visible={false}>
+              <mesh>
+                <sphereGeometry args={[0.5, 20, 14]} />
+                <meshBasicMaterial color="#23efff" wireframe transparent opacity={0.5} depthWrite={false} />
+              </mesh>
+              <mesh rotation={[0, 0.12, 0.08]}>
+                <torusGeometry args={[0.91, 0.022, 8, 36]} />
+                <meshBasicMaterial color="#ff3154" transparent opacity={0.8} depthWrite={false} />
+              </mesh>
+            </group>
+          )}
           <AudioWaveform color={color} voiceState={voiceState} speechLevel={speechLevel} />
         </>
       ) : (

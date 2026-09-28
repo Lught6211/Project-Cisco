@@ -502,18 +502,37 @@ body, html {
 .voice-pill.voice-speaking { color: #10b981; border-color: rgba(16, 185, 129, 0.65); box-shadow: 0 0 12px rgba(16, 185, 129, 0.2); }
 
 .ultron-mode { background-color: #10080c; }
-.ultron-mode .canvas-layer::after { background: radial-gradient(ellipse at 53% 51%, rgba(255,25,55,.13), transparent 52%); animation: ultron-scan 2.4s steps(2,end) infinite; }
+.ultron-mode .canvas-layer::after { background: radial-gradient(ellipse at 53% 51%, rgba(255,25,55,.11), transparent 52%); }
+.ultron-mode .canvas-layer::before {
+  content:""; position:absolute; z-index:3; inset:0; pointer-events:none; opacity:0;
+  background:repeating-linear-gradient(0deg,transparent 0 5px,rgba(255,35,73,.25) 5px 7px,transparent 7px 10px);
+  mix-blend-mode:screen; animation:spiderverse-tear 4.7s linear infinite;
+}
 .ultron-mode .top-bar { border-bottom-color: rgba(255,38,63,.48); box-shadow: 0 3px 26px rgba(255,20,48,.11); }
 .ultron-mode .brand-title, .ultron-mode .brand-sub, .ultron-mode .eyebrow { color: #ff5367; }
-.ultron-mode .logo-box { color:#ff263f; border-color:rgba(255,38,63,.7); background:rgba(255,38,63,.12); box-shadow:0 0 18px rgba(255,38,63,.4); animation: ultron-flicker .13s steps(2,end) infinite; }
+.ultron-mode .logo-box { color:#ff263f; border-color:rgba(255,38,63,.7); background:rgba(255,38,63,.12); box-shadow:0 0 18px rgba(255,38,63,.4); animation:spiderverse-signal 4.7s linear infinite; }
 .ultron-mode .status-text { color:#ff5367; }
-.ultron-mode .ultron-dot { background:#ff263f; box-shadow:0 0 12px #ff263f; animation:ultron-flicker .16s steps(2,end) infinite; }
+.ultron-mode .ultron-dot { background:#ff263f; box-shadow:0 0 12px #ff263f; }
 .ultron-mode .right-dock, .ultron-mode .voice-pill { border-color:rgba(255,38,63,.55); box-shadow:0 0 24px rgba(255,20,48,.2); }
 .ultron-mode .right-dock button, .ultron-mode .voice-pill { color:#ff5367; }
 .ultron-mode .node-icon-hex { color:#ff263f; border-color:rgba(255,38,63,.8); box-shadow:0 0 20px rgba(255,38,63,.4); }
 .caption-line.ultron .sender { color:#ff263f; text-shadow:0 0 8px rgba(255,38,63,.65); }
-@keyframes ultron-scan { 0%, 78%, 82%, 100% { opacity:1; } 80% { opacity:.35; } }
-@keyframes ultron-flicker { 0%, 100% { opacity:1; filter:none; } 48% { opacity:.65; filter:brightness(1.8); } 52% { opacity:.88; transform:translateX(1px); } }
+@keyframes spiderverse-tear {
+  0%, 28%, 29%, 30%, 65%, 66%, 67%, 100% { opacity:0; transform:translateX(0); clip-path:inset(48% 0 48% 0); }
+  28.2% { opacity:.75; transform:translateX(7px); clip-path:inset(42% 0 50% 0); }
+  28.6% { opacity:.42; transform:translateX(-5px); clip-path:inset(45% 0 47% 0); }
+  29.2% { opacity:0; transform:translateX(2px); }
+  65.2% { opacity:.55; transform:translateX(-8px); clip-path:inset(56% 0 38% 0); }
+  65.6% { opacity:.3; transform:translateX(4px); clip-path:inset(52% 0 43% 0); }
+  66.2% { opacity:0; transform:translateX(0); }
+}
+@keyframes spiderverse-signal {
+  0%, 28%, 29%, 30%, 65%, 66%, 67%, 100% { filter:none; transform:translateX(0); }
+  28.2% { filter:brightness(2.5) hue-rotate(-20deg); transform:translateX(2px); }
+  28.6% { filter:brightness(.7); transform:translateX(-2px); }
+  65.2% { filter:brightness(2); transform:translateX(-2px); }
+  65.6% { filter:brightness(.8); transform:translateX(1px); }
+}
 
 .node-label-tag {
   display: inline-flex;
@@ -539,7 +558,7 @@ body, html {
 .node-label-tag.selected { border-color: var(--node-accent); background: rgba(8,25,28,.96); box-shadow: 0 0 18px color-mix(in srgb, var(--node-accent) 24%, transparent); }
 
 @media (prefers-reduced-motion: reduce) {
-  .hud-panel, .hud-panel::after, .ultron-mode .logo-box, .ultron-mode .ultron-dot, .ultron-mode .canvas-layer::after { animation-duration: .01ms; animation-iteration-count: 1; }
+  .hud-panel, .hud-panel::after, .ultron-mode .logo-box, .ultron-mode .ultron-dot, .ultron-mode .canvas-layer::after, .ultron-mode .canvas-layer::before { animation-duration: .01ms; animation-iteration-count: 1; }
 }
 
 @media (max-width: 900px) {

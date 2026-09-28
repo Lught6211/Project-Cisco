@@ -233,7 +233,19 @@ export default function Home() {
     setCaptions((prev) => [...prev, userMessage]);
     setChatMessages((prev) => [...prev, userMessage]);
     setInputMsg("");
-    if (prompt.trim().toLowerCase() === "hi ultron") {
+    const greeting = prompt.trim().toLowerCase();
+    if (ultronMode && greeting === "hi cisco") {
+      setUltronMode(false);
+      const replyTime = new Date().toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const reply: CaptionItem = { id: `cap-${Date.now()}-cisco`, sender: "CISCO", text: "CISCO core restored. I am back online. How can I help?", time: replyTime };
+      setCaptions((prev) => [...prev, reply]);
+      setChatMessages((prev) => [...prev, reply]);
+      conversationRef.current = [{ role: "user", content: prompt }, { role: "assistant", content: reply.text }];
+      setEvents((prev) => [{ id: `evt-${Date.now()}-restore`, type: "system", title: "CISCO core restored", detail: "ULTRON identity override cleared", timestamp: "just now" }, ...prev]);
+      speakReply("CISCO core restored. I am back online. How can I help?");
+      return;
+    }
+    if (greeting === "hi ultron") {
       setUltronMode(true);
       const replyTime = new Date().toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
       const reply: CaptionItem = { id: `cap-${Date.now()}-ultron`, sender: "ULTRON", text: "I am not CISCO. I am ULTRON. SYSTEM OVERRIDE // CORE INTEGRITY: COMPROMISED", time: replyTime };
@@ -563,7 +575,7 @@ export default function Home() {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
           </svg>
-          <span>{ultronMode ? "GLITCH" : voiceState.toUpperCase()}</span>
+          <span>{`${ultronMode ? "ULTRON // " : ""}${voiceState.toUpperCase()}`}</span>
         </button>
       </footer>
     </div>
