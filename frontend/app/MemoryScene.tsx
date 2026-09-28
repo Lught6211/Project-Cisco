@@ -115,21 +115,19 @@ export default function MemoryScene({
 }
 
 function VectorSpaceGrid({ extent }: { extent: number }) {
-  const ref = useRef<THREE.LineSegments>(null);
+  const ref = useRef<THREE.Points>(null);
   const geometry = useMemo(() => {
-    const divisions = 18;
+    const divisions = 14;
     const halfSize = 7;
     const points: number[] = [];
-    const planes: Array<"xy" | "xz" | "yz"> = ["xy", "xz", "yz"];
-    for (const plane of planes) {
-      for (let i = 0; i <= divisions; i++) {
-        const offset = -halfSize + (2 * halfSize * i) / divisions;
-        if (plane === "xy") {
-          points.push(-halfSize, offset, 0, halfSize, offset, 0, offset, -halfSize, 0, offset, halfSize, 0);
-        } else if (plane === "xz") {
-          points.push(-halfSize, 0, offset, halfSize, 0, offset, offset, 0, -halfSize, offset, 0, halfSize);
-        } else {
-          points.push(0, -halfSize, offset, 0, halfSize, offset, 0, offset, -halfSize, 0, offset, halfSize);
+    for (let x = 0; x <= divisions; x++) {
+      for (let y = 0; y <= divisions; y++) {
+        for (let z = 0; z <= divisions; z++) {
+          points.push(
+            -halfSize + (2 * halfSize * x) / divisions,
+            -halfSize + (2 * halfSize * y) / divisions,
+            -halfSize + (2 * halfSize * z) / divisions,
+          );
         }
       }
     }
@@ -147,9 +145,9 @@ function VectorSpaceGrid({ extent }: { extent: number }) {
   });
 
   return (
-    <lineSegments ref={ref} geometry={geometry} renderOrder={0}>
-      <lineBasicMaterial color="#368d91" transparent opacity={0.19} depthWrite={false} />
-    </lineSegments>
+    <points ref={ref} geometry={geometry} renderOrder={0}>
+      <pointsMaterial color="#368d91" size={2.2} sizeAttenuation={false} transparent opacity={0.34} depthWrite={false} />
+    </points>
   );
 }
 

@@ -16,7 +16,7 @@ class AgentRuntime:
 
     def __init__(self) -> None:
         self.gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
-        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
         self.api_key = os.getenv("OPENAI_API_KEY", "").strip()
         self.model = os.getenv("OPENAI_MODEL", "llama3.2").strip()
         self.base_url = (os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
@@ -48,9 +48,23 @@ class AgentRuntime:
         payload = json.dumps({
             "systemInstruction": {"parts": [{"text": instruction}]},
             "contents": [{"role": "user", "parts": [{"text": message}]}],
-            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 700},
+            "generationConfig": {"maxOutputTokens": 700},
         }).encode("utf-8")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{parse.quote(self.gemini_model, safe='')}:generateContent"
+        try:
+            result = self._send_gemini_request(self.gemini_model, payload)
+        except error.HTTPError as exc:
+            if exc.code != 404 or self.gemini_model == "gemini-3.8-flash":
+                raise
+            logger.warning("Gemini model %s was not found; retrying with gemini-3.8-flash", self.gemini_model)
+            result = self._send_gemini_request("gemini-3.8-flash", payload)
+        parts = result["candidates"][0]["content"]["parts"]
+        answer = "\n".join(part.get("text", "") for part in parts).strip()
+        if not answer:
+            raise ValueError("Gemini returned an empty response")
+        return answer
+
+    def _send_gemini_request(self, model: str, payload: bytes) -> dict:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{parse.quote(model, safe='')}:generateContent"
         req = request.Request(
             url,
             data=payload,
@@ -58,12 +72,7 @@ class AgentRuntime:
             method="POST",
         )
         with request.urlopen(req, timeout=30) as response:
-            result = json.loads(response.read().decode("utf-8"))
-        parts = result["candidates"][0]["content"]["parts"]
-        answer = "\n".join(part.get("text", "") for part in parts).strip()
-        if not answer:
-            raise ValueError("Gemini returned an empty response")
-        return answer
+            return json.loads(response.read().decode("utf-8"))
 
     def _compatible_response(self, message: str, context: str) -> str:
         system = "You are CISCO, a helpful autonomous assistant. Be clear, accurate, and concise."
