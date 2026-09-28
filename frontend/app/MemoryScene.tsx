@@ -41,7 +41,6 @@ export default function MemoryScene({
   selected,
   voiceState,
   speechLevel,
-  ultronMode = false,
   corruption = 0,
   onSelect
 }: {
@@ -50,7 +49,6 @@ export default function MemoryScene({
   selected: string;
   voiceState: "idle" | "listening" | "thinking" | "speaking";
   speechLevel: number;
-  ultronMode?: boolean;
   corruption?: number;
   onSelect: (id: string) => void;
 }) {
@@ -189,7 +187,7 @@ export default function MemoryScene({
       <ambientLight intensity={2.0} />
       <pointLight position={[0, 0, 10]} intensity={25} color="#52e5da" />
 
-      <VectorSpaceGrid extent={spaceExtent} voiceState={voiceState} speechLevel={speechLevel} ultronMode={ultronMode} corruption={corruption} />
+      <VectorSpaceGrid extent={spaceExtent} voiceState={voiceState} speechLevel={speechLevel} corruption={corruption} />
 
       <OrbitalDrift orbitRef={orbitRef}>
         {/* Parent links glow clearly; secondary relationships stay in the background. */}
@@ -220,7 +218,6 @@ export default function MemoryScene({
             focused={selected === node.id}
             voiceState={voiceState}
             speechLevel={speechLevel}
-            ultronMode={ultronMode}
             corruption={corruption}
             onSelect={onSelect}
           />
@@ -241,7 +238,7 @@ function OrbitalDrift({ children, orbitRef }: { children: ReactNode; orbitRef: R
   return <group ref={orbitRef}>{children}</group>;
 }
 
-function VectorSpaceGrid({ extent, voiceState, speechLevel, ultronMode, corruption }: { extent: number; voiceState: string; speechLevel: number; ultronMode: boolean; corruption: number }) {
+function VectorSpaceGrid({ extent, voiceState, speechLevel, corruption }: { extent: number; voiceState: string; speechLevel: number; corruption: number }) {
   const ref = useRef<THREE.Points>(null);
   const materialRef = useRef<THREE.PointsMaterial>(null);
   const geometry = useMemo(() => {
@@ -271,13 +268,14 @@ function VectorSpaceGrid({ extent, voiceState, speechLevel, ultronMode, corrupti
     const seed = Math.abs(Math.sin(cycle * 37.19) * 45831.21) % 1;
     const start = 2.4 + seed * 1.9;
     const phase = time % 4.7;
-    const latticeGlitch = ultronMode && ((phase > start && phase < start + 0.13) || (phase > start + 0.22 && phase < start + 0.29));
+    const latticeGlitch = corruption > 0.08 && seed < corruption && ((phase > start && phase < start + 0.13) || (phase > start + 0.22 && phase < start + 0.29));
     const speaking = voiceState === "speaking";
     const target = 0.72 + Math.min(extent / 8, 0.95) + (speaking ? speechLevel * 0.16 : 0);
-    const scale = THREE.MathUtils.damp(ref.current.scale.x, target + (latticeGlitch ? 0.09 : 0), latticeGlitch ? 18 : 1.8, delta);
+    const glitchStrength = latticeGlitch ? corruption : 0;
+    const scale = THREE.MathUtils.damp(ref.current.scale.x, target + glitchStrength * 0.09, latticeGlitch ? 18 : 1.8, delta);
     ref.current.scale.setScalar(scale);
-    ref.current.position.set(latticeGlitch ? Math.sin(time * 121) * 0.06 : 0, latticeGlitch ? Math.cos(time * 97) * 0.035 : 0, 0);
-    if (materialRef.current) materialRef.current.opacity = (speaking ? 0.34 + speechLevel * 0.35 : 0.34) + (latticeGlitch ? 0.3 : 0);
+    ref.current.position.set(latticeGlitch ? Math.sin(time * 121) * 0.06 * glitchStrength : 0, latticeGlitch ? Math.cos(time * 97) * 0.035 * glitchStrength : 0, 0);
+    if (materialRef.current) materialRef.current.opacity = (speaking ? 0.34 + speechLevel * 0.35 : 0.34) + glitchStrength * 0.3;
   });
 
   const latticeColor = new THREE.Color("#368d91").lerp(new THREE.Color("#ff263f"), corruption * 0.88);
@@ -347,7 +345,6 @@ function JarvisNodeVisual({
   focused,
   voiceState, 
   speechLevel,
-  ultronMode,
   corruption,
   onSelect 
 }: { 
@@ -359,7 +356,6 @@ function JarvisNodeVisual({
   focused: boolean;
   voiceState: "idle" | "listening" | "thinking" | "speaking"; 
   speechLevel: number;
-  ultronMode: boolean;
   corruption: number;
   onSelect: (id: string) => void 
 }) {
@@ -383,9 +379,9 @@ function JarvisNodeVisual({
   const isAgent = node.kind === "agent";
   const nodeCorruption = isAgent ? corruption : THREE.MathUtils.clamp((corruption - nodeSeed * 0.55) / 0.45, 0, 1);
   const normalColor = isAgent ? (stateColors[voiceState] || "#52e5da") : (nodeTypeColors[node.kind] || "#6e9695");
-  const color = isAgent && ultronMode
-    ? "#ff263f"
-    : new THREE.Color(normalColor).lerp(new THREE.Color("#ff263f"), nodeCorruption * (isAgent ? 1 : 0.88)).getStyle();
+  const color = new THREE.Color(normalColor).lerp(new THREE.Color("#ff263f"), nodeCorruption * (isAgent ? 1 : 0.88)).getStyle();
+  const coreLabelColor = new THREE.Color("#ffffff").lerp(new THREE.Color("#ff263f"), nodeCorruption).getStyle();
+  const coreIdentity = nodeCorruption >= 0.55 ? "ULTRON" : node.label;
 
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return;
@@ -396,21 +392,21 @@ function JarvisNodeVisual({
     const glitchPhase = nodeTime % 4.7;
     const glitchSeed = Math.abs(Math.sin(glitchCycle * 91.713 + nodeSeed * 31) * 43758.5453) % 1;
     const glitchStart = 0.7 + glitchSeed * 3.4;
-    const glitching = ultronMode && nodeCorruption > 0.08 && (
+    const glitching = nodeCorruption > 0.08 && glitchSeed < nodeCorruption && (
       (glitchPhase >= glitchStart && glitchPhase < glitchStart + 0.12) ||
       (glitchPhase >= glitchStart + 0.19 && glitchPhase < glitchStart + 0.25)
     );
 
-    if (ultronMode && spawnProgress.current === null) {
-      const twitch = glitching ? Math.sin(time * 89) * 0.1 : 0;
-      groupRef.current.position.set(position[0] + twitch, position[1] + (glitching ? Math.cos(time * 73) * 0.055 : 0), position[2]);
+    if (nodeCorruption > 0.08 && spawnProgress.current === null) {
+      const twitch = glitching ? Math.sin(time * 89) * 0.1 * nodeCorruption : 0;
+      groupRef.current.position.set(position[0] + twitch, position[1] + (glitching ? Math.cos(time * 73) * 0.055 * nodeCorruption : 0), position[2]);
       groupRef.current.visible = !glitching || Math.sin(time * 103) > -0.7;
       if (glitchGhostRef.current) {
         glitchGhostRef.current.visible = glitching;
         glitchGhostRef.current.position.set(Math.sin(time * 83) * 0.18, Math.cos(time * 71) * 0.08, 0.025);
         glitchGhostRef.current.rotation.z = Math.sin(time * 37) * 0.06;
       }
-    } else if (!ultronMode) {
+    } else if (spawnProgress.current === null) {
       groupRef.current.position.set(...position);
       groupRef.current.visible = true;
       if (glitchGhostRef.current) glitchGhostRef.current.visible = false;
@@ -471,7 +467,7 @@ function JarvisNodeVisual({
             <sphereGeometry args={[0.82, 48, 48]} />
             <meshBasicMaterial color={color} wireframe transparent opacity={0.35} />
           </mesh>
-          {ultronMode && (
+          {nodeCorruption > 0.08 && (
             <group ref={glitchGhostRef} visible={false}>
               <mesh>
                 <sphereGeometry args={[0.5, 20, 14]} />
@@ -547,8 +543,8 @@ function JarvisNodeVisual({
 
       {isAgent ? (
         <Billboard follow>
-          <Text position={[0.95, 0.18, 0]} fontSize={0.22} color={ultronMode ? "#ff263f" : "#ffffff"} anchorX="left" anchorY="middle" outlineWidth={0.015} outlineColor="#081011">
-            {ultronMode ? "ULTRON" : node.label}
+          <Text position={[0.95, 0.18, 0]} fontSize={0.22} color={coreLabelColor} anchorX="left" anchorY="middle" outlineWidth={0.015} outlineColor="#081011">
+            {coreIdentity}
           </Text>
           <Text position={[0.95, -0.02, 0]} fontSize={0.08} color={color} anchorX="left" anchorY="middle" letterSpacing={0.1}>
             {`// ${node.kind.toUpperCase()}`}

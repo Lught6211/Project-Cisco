@@ -508,18 +508,18 @@ body, html {
 }
 .corruption-active { background-color: color-mix(in srgb, #081011 calc(100% - var(--ultron-corruption, 0%)), #16070a var(--ultron-corruption, 0%)); }
 .corruption-active .canvas-layer::after { background: radial-gradient(ellipse at 53% 51%, color-mix(in srgb, transparent, rgba(255,25,55,.14) var(--ultron-corruption, 0%)), transparent 52%); }
-.ultron-mode .canvas-layer::before {
-  content:""; position:absolute; z-index:3; inset:0; pointer-events:none; opacity:0;
+.ultron-glitch-active .canvas-layer::before {
+  content:""; position:absolute; z-index:3; inset:0; pointer-events:none; opacity:var(--ultron-corruption, 0%);
   background:repeating-linear-gradient(0deg,transparent 0 5px,rgba(255,35,73,.25) 5px 7px,transparent 7px 10px);
   mix-blend-mode:screen; animation:spiderverse-tear 4.7s linear infinite;
 }
 .corruption-active .top-bar { border-bottom-color: color-mix(in srgb, rgba(82,229,218,.34) calc(100% - var(--ultron-corruption, 0%)), rgba(255,38,63,.58) var(--ultron-corruption, 0%)); box-shadow: 0 3px 26px color-mix(in srgb, transparent, rgba(255,20,48,.16) var(--ultron-corruption, 0%)); }
-.ultron-mode .top-bar { animation:interface-slip 4.7s linear infinite; }
+.ultron-glitch-active .top-bar { animation:interface-slip 4.7s linear infinite; }
 .corruption-active .hud-panel { border-color:color-mix(in srgb, rgba(82,229,218,.68) calc(100% - var(--ultron-corruption, 0%)), rgba(255,38,63,.8) var(--ultron-corruption, 0%)); box-shadow:0 0 36px color-mix(in srgb, transparent, rgba(255,20,48,.2) var(--ultron-corruption, 0%)),inset 0 0 24px color-mix(in srgb, transparent, rgba(255,38,63,.08) var(--ultron-corruption, 0%)),0 18px 55px rgba(0,0,0,.35); }
 .corruption-active .hud-header { color:color-mix(in srgb, #52e5da calc(100% - var(--ultron-corruption, 0%)), #ff5367 var(--ultron-corruption, 0%)); border-color:color-mix(in srgb, rgba(82,229,218,.35) calc(100% - var(--ultron-corruption, 0%)), rgba(255,38,63,.46) var(--ultron-corruption, 0%)); background-color:color-mix(in srgb, rgba(18,56,55,.62) calc(100% - var(--ultron-corruption, 0%)), rgba(255,38,63,.12) var(--ultron-corruption, 0%)); }
 .corruption-active .brand-title, .corruption-active .brand-sub, .corruption-active .eyebrow { color:color-mix(in srgb, #52e5da calc(100% - var(--ultron-corruption, 0%)), #ff5367 var(--ultron-corruption, 0%)); }
 .corruption-active .logo-box { color:color-mix(in srgb, #52e5da calc(100% - var(--ultron-corruption, 0%)), #ff263f var(--ultron-corruption, 0%)); border-color:color-mix(in srgb, rgba(82,229,218,.5) calc(100% - var(--ultron-corruption, 0%)), rgba(255,38,63,.7) var(--ultron-corruption, 0%)); background-color:color-mix(in srgb, rgba(82,229,218,.1) calc(100% - var(--ultron-corruption, 0%)), rgba(255,38,63,.12) var(--ultron-corruption, 0%)); box-shadow:0 0 18px color-mix(in srgb, transparent, rgba(255,38,63,.4) var(--ultron-corruption, 0%)); }
-.ultron-mode .logo-box { animation:spiderverse-signal 4.7s linear infinite; }
+.ultron-glitch-active .logo-box { animation:spiderverse-signal 4.7s linear infinite; }
 .corruption-active .status-text { color:color-mix(in srgb, #b8c9c8 calc(100% - var(--ultron-corruption, 0%)), #ff5367 var(--ultron-corruption, 0%)); }
 .corruption-active .ultron-dot, .corruption-active .dot.online { background:color-mix(in srgb, #10b981 calc(100% - var(--ultron-corruption, 0%)), #ff263f var(--ultron-corruption, 0%)); box-shadow:0 0 12px color-mix(in srgb, transparent, rgba(255,38,63,.8) var(--ultron-corruption, 0%)); }
 .corruption-active .right-dock, .corruption-active .voice-pill { border-color:color-mix(in srgb, rgba(82,229,218,.3) calc(100% - var(--ultron-corruption, 0%)), rgba(255,38,63,.65) var(--ultron-corruption, 0%)); box-shadow:0 0 24px color-mix(in srgb, transparent, rgba(255,20,48,.2) var(--ultron-corruption, 0%)); }
@@ -535,13 +535,13 @@ body, html {
   65.6% { transform:translateX(calc(-50% + 2px)); }
 }
 @keyframes spiderverse-tear {
-  0%, 28%, 29%, 30%, 65%, 66%, 67%, 100% { opacity:0; transform:translateX(0); clip-path:inset(48% 0 48% 0); }
-  28.2% { opacity:.75; transform:translateX(7px); clip-path:inset(42% 0 50% 0); }
-  28.6% { opacity:.42; transform:translateX(-5px); clip-path:inset(45% 0 47% 0); }
-  29.2% { opacity:0; transform:translateX(2px); }
-  65.2% { opacity:.55; transform:translateX(-8px); clip-path:inset(56% 0 38% 0); }
-  65.6% { opacity:.3; transform:translateX(4px); clip-path:inset(52% 0 43% 0); }
-  66.2% { opacity:0; transform:translateX(0); }
+  0%, 28%, 29%, 30%, 65%, 66%, 67%, 100% { transform:translateX(0); clip-path:inset(48% 0 48% 0); }
+  28.2% { transform:translateX(7px); clip-path:inset(42% 0 50% 0); }
+  28.6% { transform:translateX(-5px); clip-path:inset(45% 0 47% 0); }
+  29.2% { transform:translateX(2px); }
+  65.2% { transform:translateX(-8px); clip-path:inset(56% 0 38% 0); }
+  65.6% { transform:translateX(4px); clip-path:inset(52% 0 43% 0); }
+  66.2% { transform:translateX(0); }
 }
 @keyframes spiderverse-signal {
   0%, 28%, 29%, 30%, 65%, 66%, 67%, 100% { filter:none; transform:translateX(0); }
@@ -579,7 +579,7 @@ body, html {
 @keyframes code-fragment-flicker { 0% {opacity:0;clip-path:inset(48% 0 48% 0);transform:translateX(5px)} 10% {opacity:.8;clip-path:inset(0);transform:translateX(-2px)} 25% {opacity:.36;transform:translateX(2px)} 32% {opacity:.8;transform:translateX(0)} 72% {opacity:.68} 88% {opacity:.24;clip-path:inset(0 0 65% 0)} 100% {opacity:0;clip-path:inset(48% 0 48% 0);transform:translateX(-4px)} }
 
 @media (prefers-reduced-motion: reduce) {
-  .hud-panel, .hud-panel::after, .ultron-mode .logo-box, .ultron-mode .ultron-dot, .ultron-mode .canvas-layer::after, .ultron-mode .canvas-layer::before { animation-duration: .01ms; animation-iteration-count: 1; }
+  .hud-panel, .hud-panel::after, .ultron-glitch-active .logo-box, .ultron-glitch-active .ultron-dot, .corruption-active .canvas-layer::after, .ultron-glitch-active .canvas-layer::before { animation-duration: .01ms; animation-iteration-count: 1; }
 }
 
 @media (max-width: 900px) {

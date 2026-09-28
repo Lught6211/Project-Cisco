@@ -60,16 +60,22 @@ export default function Home() {
     const from = corruptionRef.current;
     if (from === target) return;
     const startedAt = performance.now();
-    const duration = ultronMode ? 6200 : 2400;
+    const duration = (ultronMode ? 9000 : 6500) * Math.abs(target - from);
     const timer = window.setInterval(() => {
-      const progress = Math.min(1, (performance.now() - startedAt) / duration);
-      const value = from + (target - from) * progress;
+      const linearProgress = Math.min(1, (performance.now() - startedAt) / duration);
+      const easedProgress = linearProgress * linearProgress * (3 - 2 * linearProgress);
+      const value = from + (target - from) * easedProgress;
       corruptionRef.current = value;
       setCorruption(value);
-      if (progress >= 1) window.clearInterval(timer);
+      if (linearProgress >= 1) window.clearInterval(timer);
     }, 50);
     return () => window.clearInterval(timer);
   }, [ultronMode]);
+
+  const identityOverridden = corruption >= 0.55;
+  const identityStatus = ultronMode
+    ? corruption > 0.985 ? "IDENTITY OVERRIDE" : `CORE COMPROMISE ${Math.round(corruption * 100)}%`
+    : corruption > 0.005 ? `CISCO RESTORING ${Math.round((1 - corruption) * 100)}%` : "CORE ONLINE";
 
   useEffect(() => {
     if (!ultronMode) {
@@ -384,7 +390,7 @@ export default function Home() {
   };
 
   return (
-    <div className={`cisco-container${ultronMode ? " ultron-mode" : ""}${corruption > 0.005 ? " corruption-active" : ""}`} style={{ "--ultron-corruption": `${corruption * 100}%` } as CSSProperties & { "--ultron-corruption": string }}>
+    <div className={`cisco-container${ultronMode ? " ultron-mode" : ""}${corruption > 0.005 ? " corruption-active" : ""}${corruption > 0.18 ? " ultron-glitch-active" : ""}`} style={{ "--ultron-corruption": `${corruption * 100}%` } as CSSProperties & { "--ultron-corruption": string }}>
       {/* 3D Spatial Background */}
       <div className="canvas-layer">
         <MemoryScene
@@ -393,7 +399,6 @@ export default function Home() {
           selected={selectedId}
           voiceState={voiceState}
           speechLevel={speechLevel}
-          ultronMode={ultronMode}
           corruption={corruption}
           onSelect={selectNode}
         />
@@ -421,8 +426,8 @@ export default function Home() {
         </div>
 
         <div className="status-center">
-          <span className={`dot ${ultronMode ? "ultron-dot" : "online"}`} />
-          <span className="status-text">{ultronMode ? "IDENTITY OVERRIDE" : "CORE ONLINE"}</span>
+          <span className={`dot ${corruption > 0.005 ? "ultron-dot" : "online"}`} />
+          <span className="status-text">{identityStatus}</span>
           <span className="status-divider">|</span>
           <span className="status-time">09:41:22 UTC</span>
         </div>
@@ -500,8 +505,8 @@ export default function Home() {
                 </svg>
               </div>
               <div>
-                <h3 className="focus-title">{ultronMode && selectedNode.kind === "agent" ? "ULTRON" : selectedNode.label}</h3>
-                <p className="focus-detail">{ultronMode && selectedNode.kind === "agent" ? "Identity override // core signature corrupted" : selectedNode.detail || "Contextual graph memory node"}</p>
+                <h3 className="focus-title">{identityOverridden && selectedNode.kind === "agent" ? "ULTRON" : selectedNode.label}</h3>
+                <p className="focus-detail">{identityOverridden && selectedNode.kind === "agent" ? "Identity override // core signature corrupted" : selectedNode.detail || "Contextual graph memory node"}</p>
               </div>
             </div>
             <div className="hud-stats-grid">
@@ -637,7 +642,7 @@ export default function Home() {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
           </svg>
-          <span>{`${ultronMode ? "ULTRON // " : ""}${voiceState.toUpperCase()}`}</span>
+          <span>{`${identityOverridden ? "ULTRON // " : ""}${voiceState.toUpperCase()}`}</span>
         </button>
       </footer>
     </div>
