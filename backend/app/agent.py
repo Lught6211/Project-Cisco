@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from urllib import error, parse, request
 
@@ -16,7 +17,7 @@ class AgentRuntime:
 
     def __init__(self) -> None:
         self.gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
-        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
         self.api_key = os.getenv("OPENAI_API_KEY", "").strip()
         self.model = os.getenv("OPENAI_MODEL", "llama3.2").strip()
         self.base_url = (os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
@@ -56,23 +57,42 @@ class AgentRuntime:
             "contents": [{"role": "user", "parts": [{"text": message}]}],
             "generationConfig": {"maxOutputTokens": 700},
         }).encode("utf-8")
-        fallback_models = [model for model in ("gemini-3.8-flash", "gemini-3.5-flash-lite") if model != self.gemini_model]
-        for index, model in enumerate([self.gemini_model, *fallback_models]):
+        fallback_models = [model for model in ("gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash") if model != self.gemini_model]
+        models = [self.gemini_model, *fallback_models]
+        attempted: list[str] = []
+        deadline = time.monotonic() + 28
+        result: dict | None = None
+        for index, model in enumerate(models):
             try:
-                result = self._send_gemini_request(model, payload)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                result = self._send_gemini_request(model, payload, timeout=min(15, remaining))
                 break
             except error.HTTPError as exc:
+                attempted.append(f"{model} (HTTP {exc.code})")
                 retryable = exc.code in (404, 429, 502, 503)
-                if not retryable or index == len(fallback_models):
+                if not retryable:
                     raise
+                if index == len(models) - 1:
+                    raise ValueError(f"Gemini model fallback exhausted: {', '.join(attempted)}. Try again shortly.") from exc
                 logger.warning("Gemini model %s returned HTTP %s; retrying with a fallback model", model, exc.code)
+            except (TimeoutError, error.URLError, OSError) as exc:
+                attempted.append(f"{model} (connection timeout/error)")
+                if index == len(models) - 1:
+                    raise ValueError(f"Gemini model fallback exhausted: {', '.join(attempted)}. Try again shortly.") from exc
+                logger.warning("Gemini model %s could not be reached; retrying with a fallback model: %s", model, exc)
+        else:
+            raise ValueError("Gemini models exhausted")
+        if result is None:
+            raise ValueError(f"Gemini fallback models failed: {', '.join(attempted)}. Try again shortly.")
         parts = result["candidates"][0]["content"]["parts"]
         answer = "\n".join(part.get("text", "") for part in parts).strip()
         if not answer:
             raise ValueError("Gemini returned an empty response")
         return answer
 
-    def _send_gemini_request(self, model: str, payload: bytes) -> dict:
+    def _send_gemini_request(self, model: str, payload: bytes, timeout: float = 15) -> dict:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{parse.quote(model, safe='')}:generateContent"
         req = request.Request(
             url,
@@ -80,7 +100,7 @@ class AgentRuntime:
             headers={"Content-Type": "application/json", "x-goog-api-key": self.gemini_api_key},
             method="POST",
         )
-        with request.urlopen(req, timeout=30) as response:
+        with request.urlopen(req, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
 
     def _compatible_response(self, message: str, context: str) -> str:
