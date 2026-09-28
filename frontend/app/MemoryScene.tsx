@@ -51,10 +51,35 @@ export default function MemoryScene({
   const safeNodes = Array.isArray(nodes) ? nodes : [];
   const safeEdges = Array.isArray(edges) ? edges : [];
 
-  const positions = useMemo(() => new Map(safeNodes.map((node, index) => [
-    node.id, 
-    [(node.x - 50) / 7.2, (50 - node.y) / 7.2, ((index % 3) - 1) * 0.9] as [number, number, number]
-  ])), [safeNodes]);
+  const positions = useMemo(() => {
+    // Arrange nodes in stable semantic sectors instead of trusting the old
+    // modulo-generated x/y coordinates, which caused collisions and tangles.
+    const sectors: Record<string, number> = { person: -Math.PI / 2, place: -Math.PI / 4, task: Math.PI, memory: Math.PI / 4 };
+    const grouped = new Map<string, MemoryNode[]>();
+    safeNodes.filter((node) => node.kind !== "agent").forEach((node) => {
+      const group = grouped.get(node.kind) ?? [];
+      group.push(node);
+      grouped.set(node.kind, group);
+    });
+    const result = new Map<string, [number, number, number]>();
+    const agent = safeNodes.find((node) => node.kind === "agent");
+    if (agent) result.set(agent.id, [0, 0, 0]);
+    for (const [kind, group] of grouped) {
+      group.sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
+      const center = sectors[kind] ?? -Math.PI / 2;
+      const spread = Math.min(Math.PI * 0.62, 0.72 + group.length * 0.19);
+      group.forEach((node, index) => {
+        const ring = Math.floor(index / 5);
+        const slot = index % 5;
+        const ringCount = Math.min(5, group.length - ring * 5);
+        const angle = center + (slot - (ringCount - 1) / 2) * (spread / Math.max(ringCount - 1, 1));
+        const radius = 2.7 + ring * 1.15;
+        const depth = ((index % 3) - 1) * 0.58 + (kind === "place" ? -0.45 : kind === "memory" ? 0.45 : 0);
+        result.set(node.id, [Math.cos(angle) * radius, Math.sin(angle) * radius, depth]);
+      });
+    }
+    return result;
+  }, [safeNodes]);
 
   const relationshipLevels = useMemo(() => new Map(safeNodes.map((node) => [
     node.id, 
@@ -143,7 +168,7 @@ function VectorSpaceGrid({ extent, voiceState, speechLevel }: { extent: number; 
   useFrame((_, delta) => {
     if (!ref.current) return;
     const speaking = voiceState === "speaking";
-    const target = 0.72 + Math.min(extent / 8, 0.95) + (speaking ? 0.04 + speechLevel * 0.1 : 0);
+    const target = 0.72 + Math.min(extent / 8, 0.95) + (speaking ? speechLevel * 0.16 : 0);
     const scale = THREE.MathUtils.damp(ref.current.scale.x, target, 1.8, delta);
     ref.current.scale.setScalar(scale);
     if (materialRef.current) materialRef.current.opacity = speaking ? 0.34 + speechLevel * 0.35 : 0.34;
@@ -178,7 +203,7 @@ function AudioWaveform({ color, voiceState, speechLevel }: { color: string; voic
       for (let i = 0; i < sampleCount; i++) {
         const angle = (i / sampleCount) * Math.PI * 2;
         const carrier = 0.5 + 0.5 * Math.sin(i * 0.43 - time * 15 + plane * 1.7);
-        const ripple = speaking ? 0.035 + speechLevel * (0.07 + carrier * 0.3) : 0.018;
+        const ripple = speaking ? speechLevel * (0.025 + carrier * 0.23) : 0;
         const innerRadius = 1.04;
         const outerRadius = innerRadius + ripple;
         const c = Math.cos(angle);
@@ -196,12 +221,12 @@ function AudioWaveform({ color, voiceState, speechLevel }: { color: string; voic
       }
     }
     attribute.needsUpdate = true;
-    if (materialRef.current) materialRef.current.opacity = speaking ? 0.86 : 0.28;
+    if (materialRef.current) materialRef.current.opacity = speaking ? 0.22 + speechLevel * 0.72 : 0.12;
   });
 
   return (
     <lineSegments geometry={geometry} renderOrder={2} frustumCulled={false}>
-      <lineBasicMaterial ref={materialRef} color={color} transparent opacity={0.28} depthWrite={false} />
+      <lineBasicMaterial ref={materialRef} color={color} transparent opacity={0.12} depthWrite={false} />
     </lineSegments>
   );
 }
@@ -240,9 +265,9 @@ function JarvisNodeVisual({
     if (ring1Ref.current) ring1Ref.current.rotation.x += delta * (isAgent ? 0.5 : 0.2);
     if (ring2Ref.current) ring2Ref.current.rotation.z -= delta * (isAgent ? 0.7 : 0.3);
 
-    const pulse = isAgent 
-      ? voiceState === "speaking" ? speechLevel * 0.11 : Math.sin(time * (voiceState === "listening" ? 8 : 2)) * 0.035
-      : Math.sin(time * 1.5 + level) * 0.03;
+    const pulse = isAgent
+      ? voiceState === "speaking" ? speechLevel * 0.16 : Math.sin(time * (voiceState === "listening" ? 8 : 2)) * 0.035
+      : Math.sin(time * 1.2 + level) * 0.018;
       
     groupRef.current.scale.setScalar((active ? 1.22 : 1.0) + pulse);
   });
@@ -263,7 +288,8 @@ function JarvisNodeVisual({
           <AudioWaveform color={color} voiceState={voiceState} speechLevel={speechLevel} />
         </>
       ) : (
-        /* MEMORY NODES: Geometry Polygon Density Directly Dictated by Relationship Level */
+        /* Memory nodes: faceted holographic shell, luminous core, and rotating reticles. */
+        <group>
         <mesh ref={ring1Ref}>
           {level >= 4 ? (
             /* Level 4+: Ultra High-Poly Geodesic Icosahedron */
@@ -278,8 +304,17 @@ function JarvisNodeVisual({
             /* Level 1: Octahedron */
             <octahedronGeometry args={[0.22, 0]} />
           )}
-          <meshBasicMaterial color={color} wireframe transparent opacity={active ? 0.95 : 0.75} />
+          <meshBasicMaterial color={color} wireframe transparent opacity={active ? 1 : 0.72} />
         </mesh>
+        <mesh>
+          <icosahedronGeometry args={[0.075, 1]} />
+          <meshBasicMaterial color={color} transparent opacity={active ? 0.8 : 0.48} />
+        </mesh>
+        <mesh rotation={[Math.PI / 2.4, 0.25, 0]}>
+          <torusGeometry args={[0.34, 0.009, 8, 48]} />
+          <meshBasicMaterial color={color} transparent opacity={active ? 0.68 : 0.34} />
+        </mesh>
+        </group>
       )}
 
       {/* Multi-Ring Orbital Reticles */}
@@ -291,6 +326,12 @@ function JarvisNodeVisual({
         <mesh rotation={[0, Math.PI / 4, Math.PI / 3]}>
           <torusGeometry args={[1.08, 0.009, 12, 64]} />
           <meshBasicMaterial color={color} transparent opacity={0.35} />
+        </mesh>
+      )}
+      {!isAgent && (
+        <mesh rotation={[Math.PI / 3, 0.4, 0]}>
+          <torusGeometry args={[0.48, 0.006, 6, 48]} />
+          <meshBasicMaterial color={color} transparent opacity={active ? 0.54 : 0.26} />
         </mesh>
       )}
 

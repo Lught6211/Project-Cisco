@@ -99,11 +99,26 @@ export default function Home() {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = navigator.language || "en-US";
-    let phase = 0;
+    const femaleVoiceNames = /\b(samantha|zira|aria|jenny|michelle|susan|karen|victoria|hazel|sonia|libby|natasha|ava|allison|joanna|kendra|kimberly|salli|ivy|google uk english female|google us english)\b/i;
+    const chooseVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices.length) return;
+      const language = utterance.lang.toLowerCase();
+      const sameLanguage = voices.filter((voice) => voice.lang.toLowerCase() === language);
+      const englishVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith("en"));
+      const candidates = sameLanguage.length ? sameLanguage : englishVoices;
+      const preferred = candidates.find((voice) => femaleVoiceNames.test(voice.name));
+      if (preferred) utterance.voice = preferred;
+    };
+    chooseVoice();
+    if (!utterance.voice) {
+      window.speechSynthesis.addEventListener("voiceschanged", chooseVoice, { once: true });
+    }
+    let level = 0;
     const levelTimer = window.setInterval(() => {
-      phase += 0.34;
-      const syllable = Math.max(0, Math.sin(phase * 2.15) * Math.sin(phase * 0.47));
-      setSpeechLevel(0.16 + syllable * 0.84);
+      level *= 0.82;
+      if (level < 0.025) level = 0;
+      setSpeechLevel(level);
     }, 45);
     const finishSpeaking = () => {
       window.clearInterval(levelTimer);
@@ -111,8 +126,16 @@ export default function Home() {
       setVoiceState("idle");
     };
     utterance.volume = 1;
+    utterance.onstart = () => setVoiceState("speaking");
+    utterance.onboundary = (event) => {
+      if (event.name !== "word") return;
+      const wordLength = Math.max(1, event.charLength || 1);
+      level = Math.min(1, 0.38 + wordLength * 0.055);
+      setSpeechLevel(level);
+    };
     utterance.onend = finishSpeaking;
     utterance.onerror = finishSpeaking;
+    setSpeechLevel(0);
     setVoiceState("speaking");
     window.speechSynthesis.speak(utterance);
   };
