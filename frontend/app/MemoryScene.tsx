@@ -51,35 +51,91 @@ export default function MemoryScene({
   const safeNodes = Array.isArray(nodes) ? nodes : [];
   const safeEdges = Array.isArray(edges) ? edges : [];
 
-  const positions = useMemo(() => {
-    // Arrange nodes in stable semantic sectors instead of trusting the old
-    // modulo-generated x/y coordinates, which caused collisions and tangles.
-    const sectors: Record<string, number> = { person: -Math.PI / 2, place: -Math.PI / 4, task: Math.PI, memory: Math.PI / 4 };
-    const grouped = new Map<string, MemoryNode[]>();
-    safeNodes.filter((node) => node.kind !== "agent").forEach((node) => {
-      const group = grouped.get(node.kind) ?? [];
-      group.push(node);
-      grouped.set(node.kind, group);
-    });
-    const result = new Map<string, [number, number, number]>();
-    const agent = safeNodes.find((node) => node.kind === "agent");
-    if (agent) result.set(agent.id, [0, 0, 0]);
-    for (const [kind, group] of grouped) {
-      group.sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
-      const center = sectors[kind] ?? -Math.PI / 2;
-      const spread = Math.min(Math.PI * 0.62, 0.72 + group.length * 0.19);
-      group.forEach((node, index) => {
-        const ring = Math.floor(index / 5);
-        const slot = index % 5;
-        const ringCount = Math.min(5, group.length - ring * 5);
-        const angle = center + (slot - (ringCount - 1) / 2) * (spread / Math.max(ringCount - 1, 1));
-        const radius = 2.7 + ring * 1.15;
-        const depth = ((index % 3) - 1) * 0.58 + (kind === "place" ? -0.45 : kind === "memory" ? 0.45 : 0);
-        result.set(node.id, [Math.cos(angle) * radius, Math.sin(angle) * radius, depth]);
+  const layout = useMemo(() => {
+    const byId = new Map<string, MemoryNode>();
+    const adjacency = new Map<string, Set<string>>();
+    for (const node of safeNodes) {
+      byId.set(node.id, node);
+      adjacency.set(node.id, new Set());
+    }
+    for (const edge of safeEdges) {
+      if (!byId.has(edge.source) || !byId.has(edge.target)) continue;
+      adjacency.get(edge.source)?.add(edge.target);
+      adjacency.get(edge.target)?.add(edge.source);
+    }
+
+    const compareNodes = (a: string, b: string) =>
+      (byId.get(a)?.label ?? a).localeCompare(byId.get(b)?.label ?? b) || a.localeCompare(b);
+    const root = safeNodes.find((node) => node.kind === "agent")?.id ?? safeNodes[0]?.id;
+    const parentByNode = new Map<string, string>();
+    const depthByNode = new Map<string, number>();
+    const children = new Map<string, string[]>();
+    if (root) {
+      depthByNode.set(root, 0);
+      const queue = [root];
+      const discover = (parent: string, child: string) => {
+        if (depthByNode.has(child)) return;
+        parentByNode.set(child, parent);
+        depthByNode.set(child, (depthByNode.get(parent) ?? 0) + 1);
+        const siblings = children.get(parent) ?? [];
+        siblings.push(child);
+        children.set(parent, siblings);
+        queue.push(child);
+      };
+      while (queue.length || safeNodes.some((node) => !depthByNode.has(node.id))) {
+        while (queue.length) {
+          const parent = queue.shift()!;
+          [...(adjacency.get(parent) ?? [])].sort(compareNodes).forEach((child) => discover(parent, child));
+        }
+        const orphan = safeNodes.filter((node) => !depthByNode.has(node.id)).sort((a, b) => compareNodes(a.id, b.id))[0];
+        if (orphan) discover(root, orphan.id);
+      }
+    }
+
+    const positions = new Map<string, [number, number, number]>();
+    if (root) positions.set(root, [0, 0, 0]);
+    const fibonacciDirection = (index: number, count: number): THREE.Vector3 => {
+      const y = 1 - 2 * (index + 0.5) / count;
+      const radius = Math.sqrt(Math.max(0, 1 - y * y));
+      const angle = index * Math.PI * (3 - Math.sqrt(5));
+      return new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+    };
+    const rootChildren = children.get(root ?? "") ?? [];
+    const rootRadius = 2.9 + Math.max(0, rootChildren.length - 8) * 0.075;
+    for (const [parent, childIds] of children) {
+      childIds.sort(compareNodes);
+      const parentPosition = new THREE.Vector3(...(positions.get(parent) ?? [0, 0, 0]));
+      const parentDirection = parentPosition.lengthSq() > 0
+        ? parentPosition.clone().normalize()
+        : new THREE.Vector3(0, 1, 0);
+      const tangent = new THREE.Vector3(0, 0, 1);
+      if (Math.abs(parentDirection.dot(tangent)) > 0.92) tangent.set(1, 0, 0);
+      const side = new THREE.Vector3().crossVectors(parentDirection, tangent).normalize();
+      tangent.crossVectors(side, parentDirection).normalize();
+      childIds.forEach((childId, index) => {
+        const depth = depthByNode.get(childId) ?? 1;
+        let direction: THREE.Vector3;
+        if (parent === root) {
+          direction = fibonacciDirection(index, childIds.length);
+        } else {
+          // Keep each descendant near its parent's direction, like a moon in
+          // the same solar-system branch, while spacing siblings around it.
+          const count = childIds.length;
+          const cone = Math.min(0.92, 0.24 + Math.sqrt(count) * 0.14);
+          const theta = cone * Math.sqrt((index + 0.5) / count);
+          const angle = index * Math.PI * (3 - Math.sqrt(5));
+          direction = parentDirection.clone().multiplyScalar(Math.cos(theta))
+            .addScaledVector(tangent, Math.sin(theta) * Math.cos(angle))
+            .addScaledVector(side, Math.sin(theta) * Math.sin(angle)).normalize();
+        }
+        const radius = rootRadius + (depth - 1) * 2.15;
+        const position = direction.multiplyScalar(radius);
+        positions.set(childId, [position.x, position.y, position.z]);
       });
     }
-    return result;
-  }, [safeNodes]);
+    return { positions, parentByNode };
+  }, [safeNodes, safeEdges]);
+  const { positions, parentByNode } = layout;
 
   const relationshipLevels = useMemo(() => new Map(safeNodes.map((node) => [
     node.id, 
@@ -96,7 +152,7 @@ export default function MemoryScene({
 
   return (
     <Canvas 
-      camera={{ position: [0, 0, 9.2], fov: 42 }} 
+      camera={{ position: [0, 0, Math.max(9.2, spaceExtent * 2.15)], fov: 42 }}
       dpr={[1, 2]} 
       gl={{ antialias: true, powerPreference: "high-performance" }}
     >
@@ -116,8 +172,8 @@ export default function MemoryScene({
               points={[from, to]}
               color="#52e5da"
               transparent
-              opacity={0.4}
-              lineWidth={1.2}
+              opacity={parentByNode.get(edge.source) === edge.target || parentByNode.get(edge.target) === edge.source ? 0.42 : 0.09}
+              lineWidth={parentByNode.get(edge.source) === edge.target || parentByNode.get(edge.target) === edge.source ? 1.2 : 0.6}
             />
           </group>
         ) : null;
