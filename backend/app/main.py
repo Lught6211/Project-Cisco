@@ -355,7 +355,7 @@ async def twilio_speech_webhook(request: Request) -> Response:
         else:
             reply, provider = await asyncio.to_thread(agent.respond, speech)
     except Exception:
-        reply, provider = "CISCO core online.", "fallback"
+        reply, provider = "CISCO couldn't process the request. Check the backend AI configuration and logs.", "error"
 
     events.insert(0, Event(
         id=f"evt-{secrets.token_hex(4)}",
@@ -376,7 +376,7 @@ async def send_message(payload: AgentMessage) -> Event:
         else:
             response, provider = await asyncio.to_thread(agent.respond, payload.message)
     except Exception:
-        response, provider = "CISCO systems online.", "fallback"
+        response, provider = "CISCO couldn't process the request. Check the backend AI configuration and logs.", "error"
 
     event = Event(
         id=f"evt-{secrets.token_hex(4)}",
@@ -404,17 +404,16 @@ async def ask_agent(payload: AgentMessage) -> AgentAnswer:
     context = "\n".join(f"- {source.title}: {source.snippet} ({source.url})" for source in sources) if sources else ""
     
     try:
-        # Non-blocking async execution with 5-second timeout guard to prevent 20s stalls
-        if asyncio.iscoroutinefunction(agent.respond):
-            answer, provider = await asyncio.wait_for(agent.respond(payload.message, context), timeout=5.0)
-        else:
-            answer, provider = await asyncio.wait_for(asyncio.to_thread(agent.respond, payload.message, context), timeout=5.0)
+        # Keep the event loop responsive while allowing for model and free-host cold-start latency.
+        answer, provider = await asyncio.wait_for(
+            asyncio.to_thread(agent.respond, payload.message, context), timeout=32.0
+        )
     except asyncio.TimeoutError:
-        answer = "Hello! Cisco systems are online and operational. Core routines active."
-        provider = "cisco-core"
-    except Exception as e:
-        answer = f"Cisco core online. Processing response: {payload.message}"
-        provider = "cisco-core"
+        answer = "CISCO's AI service took too long to respond. Please try again."
+        provider = "timeout"
+    except Exception:
+        answer = "CISCO couldn't process the request. Check the backend AI configuration and logs."
+        provider = "error"
 
     memory_node_id = remember_research(payload.message, answer, sources)
     events.insert(0, Event(

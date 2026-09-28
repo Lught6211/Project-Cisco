@@ -69,7 +69,7 @@ export default function MemoryScene({
       <ambientLight intensity={2.0} />
       <pointLight position={[0, 0, 10]} intensity={25} color="#52e5da" />
 
-      <Stars radius={48} depth={32} count={420} factor={1.4} saturation={0.15} fade speed={0.25} />
+      <Stars radius={48} depth={32} count={1200} factor={1.8} saturation={0.2} fade speed={0.25} />
 
       {/* Vector Laser Connection Lines */}
       {safeEdges.map((edge) => {

@@ -5,13 +5,13 @@ CiscoAI is a local-first foundation for an autonomous, voice-enabled AI agent wi
 ## Current slice
 
 - `backend/`: FastAPI service with health, graph, event, agent-message, and simulated outbound-call endpoints.
-- `backend/app/agent.py`: provider-neutral agent runtime with a deterministic local fallback and optional OpenAI-compatible chat completion support.
+- `backend/app/agent.py`: provider runtime for Gemini, OpenAI-compatible APIs, or local Ollama.
 - `backend/app/realtime.py`: optional realtime audio bridge for Twilio G.711 media and an OpenAI-compatible realtime provider.
 - `backend/app/web.py`: free DuckDuckGo HTML search adapter for research context.
 - `backend/data/memory.json`: created on first API start and used as the local memory store.
 - `frontend/`: Next.js dashboard with a rendered memory topology, voice-session simulation, telemetry, and directive input.
 - `frontend/app/MemoryScene.tsx`: orbitable Three.js memory graph with depth, lighting, touch gestures, and selectable nodes.
-- Provider integrations are intentionally isolated for the next milestone. No API keys are required for the local simulation.
+- Gemini is the default hosted provider when `GEMINI_API_KEY` is configured. Local Ollama remains available without a paid API key.
 
 ## Run locally
 
@@ -57,7 +57,7 @@ Install Ollama from https://ollama.com, then download the recommended local mode
 ollama pull llama3.2
 ```
 
-Copy `backend/.env.example` to `backend/.env`. The included values point CISCO at Ollama, so no paid API key is needed. The workspace is configured to load this file into Python terminals automatically. Start Ollama before the backend.
+Copy `backend/.env.example` to `backend/.env`. The included `OPENAI_BASE_URL` points CISCO at Ollama, so no paid API key is needed. Start Ollama before the backend. To use hosted Gemini instead, add a Gemini API key and set `GEMINI_API_KEY`; Gemini takes priority over the Ollama settings.
 
 To send an agent directive:
 
@@ -65,23 +65,23 @@ To send an agent directive:
 Invoke-RestMethod http://localhost:8000/api/agent/message -Method Post -ContentType 'application/json' -Body '{"message":"Remember that Maya prefers window tables"}'
 ```
 
-If Ollama is unavailable, CISCO automatically uses the deterministic local simulation response.
+If Ollama is unavailable, CISCO displays a provider connection error in the chat instead of returning a fake AI answer.
 
 ### Research, memory, and browser speech
 
-Use the dashboard directive box to ask a question. CISCO runs local-only by default; toggle `WEB RESEARCH ON` when you want free Wikipedia/DuckDuckGo context. It sends selected research to Ollama, stores the topic and up to three sources in the memory graph, and returns the answer. The `VOICE INPUT` control uses the browser Web Speech API, and answers can be spoken through the browser when voice mode is enabled. Browser speech support varies by browser and may require microphone permission.
+Use the dashboard directive box to ask a question. The app gathers free Wikipedia/DuckDuckGo context for the request, sends it to the configured model, stores the topic and up to three sources in the memory graph, and returns the answer. The microphone control currently changes the listening indicator; speech recognition is not connected to the backend chat flow.
 
-The dashboard is responsive and installable as a CiscoAI PWA on desktop and mobile browsers. The memory graph is a Three.js scene with JARVIS-style spatial dots: drag to orbit around nodes, pinch or scroll to zoom, and tap a node to focus it. A native packaged mobile app can be added later with the same API, but the current PWA requires no paid hosting or app-store account.
+The dashboard is responsive and installable as a CiscoAI PWA on desktop and mobile browsers. The memory graph is a Three.js scene with JARVIS-style spatial dots: drag to orbit around nodes, pinch or scroll to zoom, and tap a node to focus it. A native packaged mobile app can be added later with the same API, but the current PWA requires no app-store account.
 
-The desktop dashboard is a full-viewport 3D graph surface. Circular controls on the right edge open focus, activity, and chat holograms only when needed; each hologram can be dragged, resized, and closed. Voice stays button-only: the mic glows amber while listening, CiscoAI changes to amber, and its core returns to a cyan speaking waveform while answering. CiscoAI captions appear in a scrollable transparent box at bottom-left. Node names billboard toward the camera at every angle, while relationship depth changes node geometry, edge color, line weight, and dash pattern. Mobile keeps responsive scrolling where the smaller screen requires it.
+The desktop dashboard is a full-viewport 3D graph surface. Telemetry, focus, and chat panels are open at startup; the circular controls on the right edge let you hide or reopen them. Each panel can be dragged, resized, and closed. Cisco's core changes color by state: blue while idle, yellow while listening, purple while thinking, and green while speaking. Node names billboard toward the camera at every angle, while relationship depth changes node geometry, edge color, line weight, and dash pattern.
 
 The production build is warning-free after declaring Autoprefixer explicitly in the frontend development dependencies.
 
 The graph renderer uses adaptive pixel density, high-performance WebGL, and reduced antialiasing to keep the animated scene responsive on mobile and lower-end machines. The focus button opens the current-view inspector without changing the selected node.
 
-Voice status is visible beside the function rail: `IDLE` is cyan, `LISTENING` is amber, `THINKING` is violet, and `SPEAKING` is lime. To test it, open CiscoAI in Chrome or Edge, allow microphone access, click the circular microphone button, wait for the amber `LISTENING` state, and speak. Your transcript should open CiscoAI Chat; the node then changes to violet while Ollama is thinking and lime while the browser reads the response aloud. Unsupported browsers and microphone permission failures are shown beside the rail.
+The voice control currently changes the listening state; browser speech recognition and spoken replies are not wired into this dashboard flow yet.
 
-To install it, run the frontend, open `http://localhost:3000`, then use the browser menu: Chrome/Edge on Windows choose `Install CiscoAI`; Chrome on Android choose `Add to Home screen` or `Install app`. The backend must remain running locally for agent responses and memory updates.
+To install it, run the frontend, open `http://localhost:3000`, then use the browser menu: Chrome/Edge on Windows choose `Install CiscoAI`; Chrome on Android choose `Add to Home screen` or `Install app`. For local agent responses, keep the backend running. On the hosted deployment, the Render backend serves agent responses and memory updates.
 
 ### Start both services together
 
@@ -93,11 +93,13 @@ You do not need to start two terminals manually. From the project root, run:
 
 This opens separate backend and frontend terminals and keeps both services running. On your Wi-Fi network, open `http://192.168.0.7:3000` from another device. Windows Firewall may ask permission for Python and Node; allow private networks. The frontend automatically sends API requests to the same computer’s port `8000`.
 
-The launcher opens the backend and frontend in separate PowerShell windows. The CiscoAI interface keeps only circular focus, microphone, and activity controls visible at the right edge; microphone input opens the caption drawer and submits the transcript automatically.
+The launcher opens the backend and frontend in separate PowerShell windows. The CiscoAI interface starts with its telemetry, focus, and chat panels open; use the right-edge controls to close or reopen each panel.
+
+For Vercel and Render, set `NEXT_PUBLIC_API_URL` in Vercel to the Render backend URL. Set `GEMINI_API_KEY` in Render's backend environment to enable hosted Gemini replies. Keep the key in Render's environment settings; do not put it in frontend code or commit it. `GEMINI_MODEL` defaults to `gemini-2.5-flash`. If no AI provider is configured, CISCO displays a setup message instead of pretending to generate a model answer.
 
 The development CORS policy allows local-network browser access without credentials. Do not expose this development server directly to the public internet; production deployment should use HTTPS, authentication, and a restricted origin list.
 
-`localhost` is only the development address for the local server. After choosing `Install CiscoAI` in a supported browser, it opens as an application window. A public hosted deployment would use a domain instead of `localhost`; the free local-first setup intentionally keeps the backend on the same device.
+`localhost` is only the development address for the local server. After choosing `Install CiscoAI` in a supported browser, it opens as an application window. The hosted Vercel deployment calls the Render backend URL configured in `NEXT_PUBLIC_API_URL`.
 
 ### PC and Android packaging
 

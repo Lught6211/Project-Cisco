@@ -30,6 +30,14 @@ body, html {
   z-index: 1;
 }
 
+.canvas-layer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 53% 51%, rgba(82, 229, 218, 0.065), transparent 48%);
+}
+
 /* Header */
 .top-bar {
   position: absolute;
@@ -383,13 +391,15 @@ body, html {
   gap: 6px;
 }
 
-/* Compact orbital workspace, matching the earlier centered HUD layout. */
+/* Restored luminous, scanlined orbital workspace. */
 .top-bar {
   left: 50%;
   right: auto;
   width: min(1100px, calc(100vw - 48px));
   transform: translateX(-50%);
   background: rgba(8, 16, 17, 0.72);
+  border-bottom-color: rgba(82, 229, 218, 0.34);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
 }
 
 .subheader-overlay {
@@ -397,7 +407,7 @@ body, html {
   left: max(24px, calc((100vw - 1100px) / 2));
 }
 
-.section-title { display: none; }
+.section-title { display: block; }
 
 .hud-panel {
   width: 330px;
@@ -405,30 +415,56 @@ body, html {
   max-width: calc(100vw - 32px);
   min-height: 0;
   overflow: hidden;
-  background: rgba(8, 22, 22, 0.88);
-  border-color: rgba(82, 229, 218, 0.58);
-  border-radius: 0;
-  box-shadow: 0 0 30px rgba(0, 240, 255, 0.1);
+  background-color: rgba(7, 25, 25, 0.92);
+  background-image: linear-gradient(rgba(82, 229, 218, 0.026) 1px, transparent 1px), linear-gradient(145deg, rgba(13, 38, 38, 0.48), rgba(3, 12, 15, 0.28));
+  background-size: 100% 5px, 100% 100%;
+  border-color: rgba(82, 229, 218, 0.68);
+  border-radius: 2px;
+  box-shadow: 0 0 36px rgba(0, 240, 255, 0.16), inset 0 0 24px rgba(82, 229, 218, 0.035);
 }
 
-.telemetry-panel { width: 440px; height: 281px; }
+.telemetry-panel { width: 390px; height: 281px; }
 .focus-panel { width: 310px; height: 230px; }
 .chat-panel { width: 440px; height: 281px; }
-.hud-header { min-height: 34px; padding: 8px 13px; background: rgba(82, 229, 218, 0.055); }
+.hud-header { min-height: 34px; padding: 8px 13px; background: rgba(18, 56, 55, 0.62); border-bottom-color: rgba(82, 229, 218, 0.35); }
 .hud-header button { padding: 2px 4px; }
 .hud-body { padding: 13px 20px; }
 .telemetry-panel .hud-body { height: calc(100% - 34px); }
-.telemetry-list { height: 100%; max-height: none; overflow-y: auto; }
+.telemetry-list { height: 100%; max-height: none; overflow-y: auto; padding: 0 10px; }
 .telemetry-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 51px;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid rgba(82, 229, 218, 0.12);
+  border-bottom: 1px solid rgba(82, 229, 218, 0.17);
   border-radius: 0;
   margin: 0;
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 .telemetry-item:last-child { border-bottom: 0; }
-.captions-feed { max-height: 100px; }
+.telemetry-icon { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid rgba(82, 229, 218, .27); color: #52e5da; }
+.telemetry-icon.type-memory { color: #c6ef78; border-color: rgba(198, 239, 120, .35); }
+.telemetry-icon.type-call { color: #52e5da; }
+.telemetry-icon.type-system { color: #b8a3ff; border-color: rgba(184, 163, 255, .35); }
+.telemetry-copy { min-width: 0; }
+.event-title { color: #e9f2f2; font-size: 11px; line-height: 1.35; font-weight: 700; }
+.event-detail { color: #91a8a8; font-size: 10px; line-height: 1.35; margin: 3px 0 0; }
+.event-time { color: #6b9291; font-size: 8px; margin-left: auto; white-space: nowrap; align-self: flex-start; padding-top: 3px; }
+.focus-summary { display: flex; align-items: center; gap: 13px; min-height: 62px; margin-bottom: 11px; }
+.focus-title { margin: 0 0 4px; color: #effafa; font-size: 16px; font-weight: 700; }
+.focus-detail { margin: 0; color: #9bb0b0; font-size: 11px; line-height: 1.35; }
+.node-icon-hex { transition: color .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.node-icon-hex.state-idle { color: #58a6ff; border-color: rgba(88, 166, 255, .78); box-shadow: 0 0 16px rgba(88, 166, 255, .18); }
+.node-icon-hex.state-listening { color: #f2d84b; border-color: rgba(242, 216, 75, .78); box-shadow: 0 0 16px rgba(242, 216, 75, .18); }
+.node-icon-hex.state-thinking { color: #b8a3ff; border-color: rgba(184, 163, 255, .78); box-shadow: 0 0 16px rgba(184, 163, 255, .18); }
+.node-icon-hex.state-speaking { color: #10b981; border-color: rgba(16, 185, 129, .78); box-shadow: 0 0 16px rgba(16, 185, 129, .18); }
+.captions-feed { min-height: 88px; max-height: 112px; background: rgba(0, 0, 0, 0.42); border-color: rgba(82, 229, 218, .32); }
+.hud-body textarea { height: 58px; }
+.chat-panel .hud-body { padding: 13px 20px; }
+.chat-panel .hud-body textarea { margin-bottom: 8px; }
+.chat-panel .send-btn { box-shadow: 0 0 14px rgba(82, 229, 218, .1); }
 .right-dock { gap: 8px; padding: 8px; border-radius: 16px; }
 .right-dock button { border-radius: 50%; }
 .right-dock button.active-mic { border-color: #f2d84b; background: rgba(242, 216, 75, 0.2); color: #f2d84b; box-shadow: 0 0 14px rgba(242, 216, 75, 0.4); }
@@ -446,8 +482,12 @@ body, html {
 }
 
 @media (max-width: 560px) {
-  .telemetry-panel { height: 230px; }
-  .chat-panel { height: 260px; }
+  .telemetry-panel { height: 220px; }
+  .focus-panel { height: 200px; }
+  .chat-panel { height: 240px; }
+  .hud-panel { min-width: 0; }
+  .hud-body { padding: 12px; }
+  .captions-feed { min-height: 72px; max-height: 78px; }
   .right-dock { right: 8px; }
   .bottom-bar { padding: 0 12px; }
 }

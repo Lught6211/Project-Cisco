@@ -6,7 +6,7 @@ import "./scene.css";
 
 const MemoryScene = dynamic(() => import("./MemoryScene"), { ssr: false });
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://cisco-backend-yve2.onrender.com";
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || "https://cisco-backend-yve2.onrender.com").replace(/\/+$/, "");
 
 type Node = { id: string; label: string; kind: string; x: number; y: number; confidence?: string; detail?: string; active?: boolean };
 type Edge = { source: string; target: string; label: string };
@@ -36,11 +36,7 @@ export default function Home() {
     { id: "evt-3", type: "system", title: "CISCO online", detail: "All local systems nominal", timestamp: "5m ago" },
   ]);
 
-  const [captions, setCaptions] = useState<CaptionItem[]>([
-    { id: "cap-1", sender: "CISCO", text: "CiscoAI core online. Processing natural language directives...", time: "09:41:00" },
-    { id: "cap-2", sender: "USER", text: "Status report on spatial memory nodes.", time: "09:41:15" },
-    { id: "cap-3", sender: "CISCO", text: "5 spatial nodes mapped in live context graph. Stability 99.98%.", time: "09:41:18" },
-  ]);
+  const [captions, setCaptions] = useState<CaptionItem[]>([]);
 
   const [selectedId, setSelectedId] = useState<string>("cisco");
   const [voiceState, setVoiceState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
@@ -61,10 +57,9 @@ export default function Home() {
 
   useEffect(() => {
     if (window.innerWidth <= 900) {
-      setTelemetryPos({ x: 16, y: 120 });
-      setFocusPos({ x: 16, y: 420 });
-      setChatPos({ x: 16, y: Math.max(380, window.innerHeight - 320) });
-      setOpenPanels((panels) => ({ ...panels, focus: false }));
+      setTelemetryPos({ x: 16, y: 98 });
+      setFocusPos({ x: 16, y: 340 });
+      setChatPos({ x: 16, y: 570 });
     }
   }, []);
 
@@ -115,20 +110,25 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: prompt, use_web: true }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        const resTime = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        
-        // Append Agent Caption
-        setCaptions((prev) => [...prev, { id: `cap-${Date.now()}-res`, sender: "CISCO", text: data.answer || "Directive executed.", time: resTime }]);
-        
-        setEvents((prev) => [
-          { id: `evt-${Date.now()}`, type: "memory", title: "Directive Executed", detail: data.answer, timestamp: "just now" },
-          ...prev,
-        ]);
-      }
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.detail || `Backend returned HTTP ${res.status}`);
+      if (typeof data?.answer !== "string" || !data.answer.trim()) throw new Error("Backend returned an empty answer.");
+      const resTime = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      setCaptions((prev) => [...prev, { id: `cap-${Date.now()}-res`, sender: "CISCO", text: data.answer, time: resTime }]);
+      setEvents((prev) => [
+        { id: `evt-${Date.now()}`, type: "memory", title: "Directive Executed", detail: data.answer, timestamp: "just now" },
+        ...prev,
+      ]);
     } catch (e) {
-      console.error(e);
+      const resTime = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const detail = e instanceof Error ? e.message : "Unknown connection error";
+      setCaptions((prev) => [...prev, {
+        id: `cap-${Date.now()}-error`,
+        sender: "CISCO",
+        text: `Could not get an AI response: ${detail}. Check the backend service and its AI provider settings.`,
+        time: resTime,
+      }]);
     } finally {
       setIsSending(false);
       setVoiceState("idle");
@@ -227,9 +227,16 @@ export default function Home() {
           <div className="hud-body telemetry-list">
             {events.map((evt) => (
               <div key={evt.id} className="telemetry-item">
-                <div className="font-bold text-slate-200 text-[11px]">{evt.title}</div>
-                <p className="text-[10px] text-slate-400 mt-0.5">{evt.detail}</p>
-                <span className="text-[8px] text-cyan-400/60 block mt-1">{evt.timestamp}</span>
+                <span className={`telemetry-icon type-${evt.type}`} aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                  </svg>
+                </span>
+                <div className="telemetry-copy">
+                  <div className="event-title">{evt.title}</div>
+                  <p className="event-detail">{evt.detail}</p>
+                </div>
+                <span className="event-time">{evt.timestamp}</span>
               </div>
             ))}
           </div>
@@ -249,17 +256,17 @@ export default function Home() {
             <button onClick={() => togglePanel("focus")}>✕</button>
           </div>
           <div className="hud-body">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="node-icon-hex">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
+            <div className="focus-summary">
+              <div className={`node-icon-hex state-${voiceState}`} aria-label={`CISCO ${voiceState}`}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M9 4.5A3.5 3.5 0 0 0 5.8 10a3 3 0 0 0 .7 5.8A3.5 3.5 0 0 0 12 18.5V6a3.5 3.5 0 0 0-3-1.5Z" />
+                  <path d="M15 4.5A3.5 3.5 0 0 1 18.2 10a3 3 0 0 1-.7 5.8 3.5 3.5 0 0 1-5.5 2.7V6a3.5 3.5 0 0 1 3-1.5Z" />
+                  <path d="M8 9h2m4 0h2m-8 5h2m4 0h2m-4-2h.01" />
                 </svg>
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-100">{selectedNode.label}</h3>
-                <p className="text-[10px] text-slate-400">{selectedNode.detail || "Contextual graph memory node"}</p>
+                <h3 className="focus-title">{selectedNode.label}</h3>
+                <p className="focus-detail">{selectedNode.detail || "Contextual graph memory node"}</p>
               </div>
             </div>
             <div className="hud-stats-grid">
@@ -319,7 +326,7 @@ export default function Home() {
                 <line x1="22" y1="2" x2="11" y2="13" />
                 <polygon points="22 2 15 22 11 13 2 9 22 2" />
               </svg>
-              <span>EXECUTE DIRECTIVE</span>
+              <span>{isSending ? "CISCO THINKING..." : "EXECUTE DIRECTIVE"}</span>
             </button>
           </div>
         </div>
