@@ -71,9 +71,9 @@ If Ollama is unavailable, CISCO displays a provider connection error in the chat
 
 Use the dashboard directive box to ask a question. The app gathers free Wikipedia/DuckDuckGo context for the request, sends it to the configured model, stores the topic and up to three sources in the memory graph, and returns the answer. The microphone control currently changes the listening indicator; speech recognition is not connected to the backend chat flow.
 
-The dashboard is responsive and installable as a CiscoAI PWA on desktop and mobile browsers. The memory graph is a Three.js scene with a perspective vector grid and JARVIS-style spatial nodes: drag to orbit around nodes, pinch or scroll to zoom, and tap a node to focus it. A native packaged mobile app can be added later with the same API, but the current PWA requires no app-store account.
+The dashboard is responsive and installable as a CiscoAI PWA on desktop and mobile browsers. The memory graph is a Three.js scene with JARVIS-style spatial nodes connected by 3D relationship vectors; it has no background grid plane or star field. Drag to orbit around nodes, pinch or scroll to zoom, and tap a node to focus it. A native packaged mobile app can be added later with the same API, but the current PWA requires no app-store account.
 
-The desktop dashboard is a full-viewport 3D graph surface. Telemetry, focus, and chat panels are open at startup; the circular controls on the right edge let you hide or reopen them. Each panel can be dragged, resized, and closed. Cisco's core changes color by state: blue while idle, yellow while listening, purple while thinking, and green while speaking. Node names billboard toward the camera at every angle, while relationship depth changes node geometry, edge color, line weight, and dash pattern.
+The desktop dashboard is a full-viewport 3D graph surface. Telemetry, focus, and chat panels are closed at startup; use the circular controls on the right edge to open them. Each panel can be dragged, resized, and closed. Chat shows the conversation, while live captions appear separately at the bottom-left on a transparent background. Cisco's core changes color by state: blue while idle, yellow while listening, purple while thinking, and green while speaking. Node names billboard toward the camera at every angle, while relationship depth changes node geometry, edge color, line weight, and dash pattern.
 
 The production build is warning-free after declaring Autoprefixer explicitly in the frontend development dependencies.
 
@@ -93,7 +93,7 @@ You do not need to start two terminals manually. From the project root, run:
 
 This opens separate backend and frontend terminals and keeps both services running. On your Wi-Fi network, open `http://192.168.0.7:3000` from another device. Windows Firewall may ask permission for Python and Node; allow private networks. The frontend automatically sends API requests to the same computer’s port `8000`.
 
-The launcher opens the backend and frontend in separate PowerShell windows. The CiscoAI interface starts with its telemetry, focus, and chat panels open; use the right-edge controls to close or reopen each panel.
+The launcher opens the backend and frontend in separate PowerShell windows. The CiscoAI interface starts with its telemetry, focus, and chat panels closed; use the right-edge controls to open them.
 
 For Vercel and Render, set `NEXT_PUBLIC_API_URL` in Vercel to the Render backend URL. Set `GEMINI_API_KEY` in Render's backend environment to enable hosted Gemini replies. Keep the key in Render's environment settings; do not put it in frontend code or commit it. `GEMINI_MODEL` defaults to `gemini-2.5-flash`. If no AI provider is configured, CISCO displays a setup message instead of pretending to generate a model answer.
 

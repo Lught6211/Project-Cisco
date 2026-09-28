@@ -69,7 +69,6 @@ export default function MemoryScene({
       <ambientLight intensity={2.0} />
       <pointLight position={[0, 0, 10]} intensity={25} color="#52e5da" />
 
-      <gridHelper args={[40, 40, "#294e50", "#122628"]} position={[0, -4, -3]} rotation={[Math.PI / 3, 0, 0]} />
 
       {/* Vector Laser Connection Lines */}
       {safeEdges.map((edge) => {

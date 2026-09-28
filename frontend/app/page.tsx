@@ -37,6 +37,7 @@ export default function Home() {
   ]);
 
   const [captions, setCaptions] = useState<CaptionItem[]>([]);
+  const [chatMessages, setChatMessages] = useState<CaptionItem[]>([]);
 
   const [selectedId, setSelectedId] = useState<string>("cisco");
   const [voiceState, setVoiceState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
@@ -45,9 +46,9 @@ export default function Home() {
 
   // Independent Open State for Multiple Floating HUD Panels
   const [openPanels, setOpenPanels] = useState({
-    chat: true,
-    telemetry: true,
-    focus: true,
+    chat: false,
+    telemetry: false,
+    focus: false,
   });
 
   // Draggable Window Positions
@@ -99,7 +100,9 @@ export default function Home() {
     const nowTime = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     // Append User Caption
-    setCaptions((prev) => [...prev, { id: `cap-${Date.now()}`, sender: "USER", text: prompt, time: nowTime }]);
+    const userMessage = { id: `cap-${Date.now()}`, sender: "USER" as const, text: prompt, time: nowTime };
+    setCaptions((prev) => [...prev, userMessage]);
+    setChatMessages((prev) => [...prev, userMessage]);
     setInputMsg("");
     setIsSending(true);
     setVoiceState("thinking");
@@ -115,7 +118,9 @@ export default function Home() {
       if (typeof data?.answer !== "string" || !data.answer.trim()) throw new Error("Backend returned an empty answer.");
       const resTime = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-      setCaptions((prev) => [...prev, { id: `cap-${Date.now()}-res`, sender: "CISCO", text: data.answer, time: resTime }]);
+      const answer = { id: `cap-${Date.now()}-res`, sender: "CISCO" as const, text: data.answer, time: resTime };
+      setCaptions((prev) => [...prev, answer]);
+      setChatMessages((prev) => [...prev, answer]);
       setEvents((prev) => [
         { id: `evt-${Date.now()}`, type: "memory", title: "Directive Executed", detail: data.answer, timestamp: "just now" },
         ...prev,
@@ -123,12 +128,14 @@ export default function Home() {
     } catch (e) {
       const resTime = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const detail = e instanceof Error ? e.message : "Unknown connection error";
-      setCaptions((prev) => [...prev, {
+      const errorMessage = {
         id: `cap-${Date.now()}-error`,
         sender: "CISCO",
         text: `Could not get an AI response: ${detail}. Check the backend service and its AI provider settings.`,
         time: resTime,
-      }]);
+      } as const;
+      setCaptions((prev) => [...prev, errorMessage]);
+      setChatMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsSending(false);
       setVoiceState("idle");
@@ -287,7 +294,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* 3. Directive Input & Live Dialogue Captions Panel */}
+      {/* 3. CiscoAI Chat Panel */}
       {openPanels.chat && (
         <div className="hud-panel chat-panel draggable-panel" style={{ top: `${chatPos.y}px`, left: `${chatPos.x}px` }}>
           <div className="hud-corner top-left" />
@@ -296,15 +303,13 @@ export default function Home() {
           <div className="hud-corner bottom-right" />
 
           <div className="hud-header" onMouseDown={makeDraggable(setChatPos)}>
-            <span>// DIRECTIVE INPUT / CAPTIONS</span>
+            <span>// CISCOAI CHAT</span>
             <button onClick={() => togglePanel("chat")}>✕</button>
           </div>
           
           <div className="hud-body">
-            {/* Live Captions Stream Box */}
-            <div className="captions-feed">
-              <div className="caption-tag">// LIVE CAPTION STREAM</div>
-              {captions.slice(-3).map((cap) => (
+            <div className="chat-history" aria-live="polite">
+              {chatMessages.length === 0 ? <div className="chat-empty">Awaiting directive...</div> : chatMessages.slice(-20).map((cap) => (
                 <div key={cap.id} className={`caption-line ${cap.sender === "USER" ? "user" : "cisco"}`}>
                   <span className="sender">{cap.sender}:</span>
                   <span className="text">{cap.text}</span>
@@ -380,6 +385,18 @@ export default function Home() {
           </svg>
         </button>
       </div>
+
+      {captions.length > 0 && (
+        <aside className="caption-overlay" aria-label="Live captions" aria-live="polite">
+          {captions.slice(-3).map((cap) => (
+            <div key={cap.id} className={`caption-line ${cap.sender === "USER" ? "user" : "cisco"}`}>
+              <span className="sender">{cap.sender}:</span>
+              <span className="text">{cap.text}</span>
+              <span className="time">{cap.time}</span>
+            </div>
+          ))}
+        </aside>
+      )}
 
       {/* Bottom Footer Bar */}
       <footer className="bottom-bar">
