@@ -23,15 +23,16 @@ class AgentRuntime:
         self.base_url = (os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
                          or "https://api.openai.com/v1")
 
-    def respond(self, message: str, context: str = "") -> tuple[str, str]:
+    def respond(self, message: str, context: str = "", history: list[dict[str, str]] | None = None) -> tuple[str, str]:
+        history = history or []
         if self.gemini_api_key:
             try:
-                return self._gemini_response(message, context), "gemini"
+                return self._gemini_response(message, context, history), "gemini"
             except (OSError, ValueError, KeyError, error.URLError, error.HTTPError) as exc:
                 if self.api_key or self.base_url != "https://api.openai.com/v1":
                     provider = "ollama" if "localhost:11434" in self.base_url else "openai-compatible"
                     try:
-                        return self._compatible_response(message, context), provider
+                        return self._compatible_response(message, context, history), provider
                     except (OSError, ValueError, KeyError, error.URLError, error.HTTPError) as fallback_exc:
                         logger.warning("Secondary AI provider %s also failed: %s", provider, fallback_exc)
                 return self._provider_error("Gemini", exc), "gemini-error"
@@ -39,7 +40,7 @@ class AgentRuntime:
         if self.api_key or self.base_url != "https://api.openai.com/v1":
             provider = "ollama" if "localhost:11434" in self.base_url else "openai-compatible"
             try:
-                return self._compatible_response(message, context), provider
+                return self._compatible_response(message, context, history), provider
             except (OSError, ValueError, KeyError, error.URLError, error.HTTPError) as exc:
                 return self._provider_error(provider, exc), f"{provider}-error"
 
@@ -48,13 +49,24 @@ class AgentRuntime:
             "configuration-required",
         )
 
-    def _gemini_response(self, message: str, context: str) -> str:
-        instruction = "You are CISCO, a helpful autonomous assistant. Be clear, accurate, and concise."
+    def _gemini_response(self, message: str, context: str, history: list[dict[str, str]] | None = None) -> str:
+        instruction = (
+            "You are CISCO, a helpful autonomous assistant. Be clear, accurate, and concise. "
+            "Use the conversation history to resolve short or ambiguous follow-up questions. "
+            "Keep the same topic unless the user clearly changes it; do not invent a new topic for phrases like 'and what would those be?'. "
+            "If a graph topic is currently focused, treat it as the current subject even if older chat turns discussed something else."
+        )
         if context:
-            instruction += f"\nUse this research context when relevant:\n{context}"
+            instruction += f"\nUse the focused graph topic and research context when relevant:\n{context}"
+        contents = [
+            {"role": "model" if turn.get("role") == "assistant" else "user", "parts": [{"text": turn["content"]}]}
+            for turn in (history or [])[-12:]
+            if turn.get("role") in ("user", "assistant") and turn.get("content")
+        ]
+        contents.append({"role": "user", "parts": [{"text": message}]})
         payload = json.dumps({
             "systemInstruction": {"parts": [{"text": instruction}]},
-            "contents": [{"role": "user", "parts": [{"text": message}]}],
+            "contents": contents,
             "generationConfig": {"maxOutputTokens": 700},
         }).encode("utf-8")
         fallback_models = [model for model in ("gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash") if model != self.gemini_model]
@@ -103,16 +115,24 @@ class AgentRuntime:
         with request.urlopen(req, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
 
-    def _compatible_response(self, message: str, context: str) -> str:
-        system = "You are CISCO, a helpful autonomous assistant. Be clear, accurate, and concise."
+    def _compatible_response(self, message: str, context: str, history: list[dict[str, str]] | None = None) -> str:
+        system = (
+            "You are CISCO, a helpful autonomous assistant. Be clear, accurate, and concise. "
+            "Use conversation history to resolve follow-up questions and stay on the current topic unless the user changes it. "
+            "If a graph topic is currently focused, treat it as the current subject even if older chat turns discussed something else."
+        )
         if context:
-            system += f"\nUse this research context when relevant:\n{context}"
+            system += f"\nUse the focused graph topic and research context when relevant:\n{context}"
+        messages = [{"role": "system", "content": system}]
+        messages.extend(
+            {"role": turn["role"], "content": turn["content"]}
+            for turn in (history or [])[-12:]
+            if turn.get("role") in ("user", "assistant") and turn.get("content")
+        )
+        messages.append({"role": "user", "content": message})
         payload = json.dumps({
             "model": self.model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": message},
-            ],
+            "messages": messages,
             "temperature": 0.3,
         }).encode("utf-8")
         headers = {"Content-Type": "application/json"}

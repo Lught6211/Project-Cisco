@@ -3,7 +3,7 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Billboard, Line, OrbitControls, Text } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import * as THREE from "three";
 import type { Group, Mesh } from "three";
 
@@ -118,6 +118,13 @@ export default function MemoryScene({
         let direction: THREE.Vector3;
         if (parent === root) {
           direction = fibonacciDirection(index, childIds.length);
+          const screenRadius = Math.hypot(direction.x, direction.y);
+          if (screenRadius < 0.52) {
+            // Keep a planet from lining up over the core from the initial view.
+            const angle = index * Math.PI * (3 - Math.sqrt(5));
+            const depth = Math.sign(direction.z || 1) * Math.sqrt(1 - 0.52 ** 2);
+            direction.set(0.52 * Math.cos(angle), 0.52 * Math.sin(angle), depth);
+          }
         } else {
           // Keep each descendant near its parent's direction, like a moon in
           // the same solar-system branch, while spacing siblings around it.
@@ -137,6 +144,7 @@ export default function MemoryScene({
     return { positions, parentByNode };
   }, [safeNodes, safeEdges]);
   const { positions, parentByNode } = layout;
+  const orbitRef = useRef<Group>(null);
   const knownNodeIds = useRef(new Set(safeNodes.map((node) => node.id)));
   const [spawnOrigins, setSpawnOrigins] = useState<Map<string, [number, number, number]>>(() => new Map());
 
@@ -178,7 +186,7 @@ export default function MemoryScene({
 
       <VectorSpaceGrid extent={spaceExtent} voiceState={voiceState} speechLevel={speechLevel} />
 
-      <OrbitalDrift>
+      <OrbitalDrift orbitRef={orbitRef}>
         {/* Parent links glow clearly; secondary relationships stay in the background. */}
         {safeEdges.map((edge) => {
           const from = positions.get(edge.source);
@@ -204,6 +212,7 @@ export default function MemoryScene({
             spawnFrom={spawnOrigins.get(node.id)}
             level={relationshipLevels.get(node.id) ?? 1}
             active={selected === node.id || node.active === true}
+            focused={selected === node.id}
             voiceState={voiceState}
             speechLevel={speechLevel}
             onSelect={onSelect}
@@ -211,19 +220,18 @@ export default function MemoryScene({
         ))}
       </OrbitalDrift>
 
-      <SceneControls selectedId={selected} selectedPosition={positions.get(selected)} />
+      <SceneControls selectedId={selected} selectedPosition={positions.get(selected)} orbitRef={orbitRef} />
     </Canvas>
   );
 }
 
-function OrbitalDrift({ children }: { children: ReactNode }) {
-  const ref = useRef<Group>(null);
+function OrbitalDrift({ children, orbitRef }: { children: ReactNode; orbitRef: RefObject<Group | null> }) {
   useFrame((_, delta) => {
-    if (!ref.current) return;
-    ref.current.rotation.y += delta * 0.012;
-    ref.current.rotation.z += delta * 0.002;
+    if (!orbitRef.current) return;
+    orbitRef.current.rotation.y += delta * 0.012;
+    orbitRef.current.rotation.z += delta * 0.002;
   });
-  return <group ref={ref}>{children}</group>;
+  return <group ref={orbitRef}>{children}</group>;
 }
 
 function VectorSpaceGrid({ extent, voiceState, speechLevel }: { extent: number; voiceState: string; speechLevel: number }) {
@@ -321,6 +329,7 @@ function JarvisNodeVisual({
   spawnFrom,
   level, 
   active, 
+  focused,
   voiceState, 
   speechLevel,
   onSelect 
@@ -330,6 +339,7 @@ function JarvisNodeVisual({
   spawnFrom?: [number, number, number];
   level: number; 
   active: boolean; 
+  focused: boolean;
   voiceState: "idle" | "listening" | "thinking" | "speaking"; 
   speechLevel: number;
   onSelect: (id: string) => void 
@@ -339,6 +349,7 @@ function JarvisNodeVisual({
   const ring2Ref = useRef<Mesh>(null);
   const spawnProgress = useRef<number | null>(null);
   const spawnOrbRef = useRef<Group>(null);
+  const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
     if (spawnFrom) spawnProgress.current = 0;
@@ -390,7 +401,13 @@ function JarvisNodeVisual({
 
   return (
     <>
-    <group ref={groupRef} position={position} onClick={(e) => { e.stopPropagation(); onSelect(node.id); }}>
+    <group
+      ref={groupRef}
+      position={position}
+      onClick={(e) => { e.stopPropagation(); onSelect(node.id); }}
+      onPointerEnter={(e) => { e.stopPropagation(); setHovered(true); }}
+      onPointerLeave={() => setHovered(false)}
+    >
       {isAgent ? (
         /* CISCO CORE: Ultra-High Poly Smooth Sphere (64x64 segments) + 48x48 Wireframe Sphere */
         <>
@@ -452,15 +469,29 @@ function JarvisNodeVisual({
         </mesh>
       )}
 
-      {/* Text Billboard */}
-      <Billboard follow>
-        <Text position={[isAgent ? 0.95 : 0.52, 0.18, 0]} fontSize={isAgent ? 0.22 : 0.13} color="#ffffff" anchorX="left" anchorY="middle" outlineWidth={0.015} outlineColor="#081011">
-          {node.label}
-        </Text>
-        <Text position={[isAgent ? 0.95 : 0.52, -0.02, 0]} fontSize={0.08} color={color} anchorX="left" anchorY="middle" letterSpacing={0.1}>
-          {`// ${node.kind.toUpperCase()}`}
-        </Text>
-      </Billboard>
+      {isAgent ? (
+        <Billboard follow>
+          <Text position={[0.95, 0.18, 0]} fontSize={0.22} color="#ffffff" anchorX="left" anchorY="middle" outlineWidth={0.015} outlineColor="#081011">
+            {node.label}
+          </Text>
+          <Text position={[0.95, -0.02, 0]} fontSize={0.08} color={color} anchorX="left" anchorY="middle" letterSpacing={0.1}>
+            {`// ${node.kind.toUpperCase()}`}
+          </Text>
+        </Billboard>
+      ) : (focused || hovered) ? (
+        <Billboard follow position={[0, 0.52, 0]}>
+          <mesh position={[0, -0.005, -0.015]}>
+            <planeGeometry args={[Math.min(2.8, Math.max(1.2, node.label.length * 0.085 + 0.32)), 0.42]} />
+            <meshBasicMaterial color="#071314" transparent opacity={0.92} depthWrite={false} />
+          </mesh>
+          <Text position={[0, 0.055, 0.01]} fontSize={0.13} color="#f3ffff" anchorX="center" anchorY="middle" outlineWidth={0.01} outlineColor="#071011">
+            {node.label}
+          </Text>
+          <Text position={[0, -0.105, 0.01]} fontSize={0.07} color={color} anchorX="center" anchorY="middle" letterSpacing={0.1}>
+            {`// ${node.kind.toUpperCase()}`}
+          </Text>
+        </Billboard>
+      ) : null}
     </group>
     {spawnFrom && (
       <group ref={spawnOrbRef} position={spawnFrom}>
@@ -478,7 +509,7 @@ function JarvisNodeVisual({
   );
 }
 
-function SceneControls({ selectedId, selectedPosition }: { selectedId: string; selectedPosition?: [number, number, number] }) {
+function SceneControls({ selectedId, selectedPosition, orbitRef }: { selectedId: string; selectedPosition?: [number, number, number]; orbitRef: RefObject<Group | null> }) {
   const controlsRef = useRef<any>(null);
   const focusTarget = useRef(new THREE.Vector3());
   const focusPosition = useRef(new THREE.Vector3());
@@ -490,10 +521,11 @@ function SceneControls({ selectedId, selectedPosition }: { selectedId: string; s
     if (lastSelectedId.current !== selectedId) {
       lastSelectedId.current = selectedId;
       focusTarget.current.set(...selectedPosition);
-      focusPosition.current.set(selectedPosition[0], selectedPosition[1], selectedPosition[2] + 4.0);
+      orbitRef.current?.localToWorld(focusTarget.current);
+      focusPosition.current.copy(focusTarget.current).add(new THREE.Vector3(0, 0, 4.0));
       focusing.current = true;
     }
-  }, [selectedId, selectedPosition]);
+  }, [selectedId, selectedPosition, orbitRef]);
 
   useFrame((_, delta) => {
     if (!focusing.current || !controlsRef.current) return;

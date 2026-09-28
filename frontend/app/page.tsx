@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import "./scene.css";
 
@@ -12,6 +12,7 @@ type Node = { id: string; label: string; kind: string; x: number; y: number; con
 type Edge = { source: string; target: string; label: string };
 type EventItem = { id: string; type: string; title: string; detail: string; timestamp: string };
 type CaptionItem = { id: string; sender: "USER" | "CISCO"; text: string; time: string };
+type ConversationTurn = { role: "user" | "assistant"; content: string };
 
 export default function Home() {
   const [nodes, setNodes] = useState<Node[]>([
@@ -38,6 +39,9 @@ export default function Home() {
 
   const [captions, setCaptions] = useState<CaptionItem[]>([]);
   const [chatMessages, setChatMessages] = useState<CaptionItem[]>([]);
+  const conversationRef = useRef<ConversationTurn[]>([]);
+  const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  const voiceChoiceLockedRef = useRef(false);
 
   const [selectedId, setSelectedId] = useState<string>("cisco");
   const [voiceState, setVoiceState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
@@ -87,6 +91,11 @@ export default function Home() {
   const selectedNode = nodes.find((n) => n.id === selectedId) || nodes[0];
   const nodeRelationships = edges.filter((e) => e.source === selectedId || e.target === selectedId).length;
 
+  const selectNode = (id: string) => {
+    setSelectedId(id);
+    setOpenPanels((prev) => ({ ...prev, focus: true }));
+  };
+
   const toggleMic = () => {
     setVoiceState((prev) => (prev === "idle" ? "listening" : "idle"));
   };
@@ -99,7 +108,7 @@ export default function Home() {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = navigator.language || "en-US";
-    const femaleVoiceNames = /\b(samantha|zira|aria|jenny|michelle|susan|karen|victoria|hazel|sonia|libby|natasha|ava|allison|joanna|kendra|kimberly|salli|ivy|google uk english female|google us english)\b/i;
+    const femaleVoiceNames = ["samantha", "zira", "aria", "jenny", "michelle", "susan", "karen", "victoria", "hazel", "sonia", "libby", "natasha", "ava", "allison", "joanna", "kendra", "kimberly", "salli", "ivy", "google uk english female", "google us english"];
     const chooseVoice = () => {
       const voices = window.speechSynthesis.getVoices();
       if (!voices.length) return;
@@ -107,21 +116,23 @@ export default function Home() {
       const sameLanguage = voices.filter((voice) => voice.lang.toLowerCase() === language);
       const englishVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith("en"));
       const candidates = sameLanguage.length ? sameLanguage : englishVoices;
-      const preferred = candidates.find((voice) => femaleVoiceNames.test(voice.name));
-      if (preferred) utterance.voice = preferred;
+      if (!voiceChoiceLockedRef.current) {
+        for (const knownName of femaleVoiceNames) {
+          const match = candidates.find((voice) => voice.name.toLowerCase().includes(knownName));
+          if (match) {
+            preferredVoiceRef.current = match;
+            break;
+          }
+        }
+        preferredVoiceRef.current ??= candidates[0] ?? voices[0];
+        voiceChoiceLockedRef.current = true;
+      }
+      if (preferredVoiceRef.current) utterance.voice = preferredVoiceRef.current;
     };
-    chooseVoice();
-    if (!utterance.voice) {
-      window.speechSynthesis.addEventListener("voiceschanged", chooseVoice, { once: true });
-    }
     let level = 0;
-    const levelTimer = window.setInterval(() => {
-      level *= 0.82;
-      if (level < 0.025) level = 0;
-      setSpeechLevel(level);
-    }, 45);
+    let levelTimer: number | undefined;
     const finishSpeaking = () => {
-      window.clearInterval(levelTimer);
+      if (levelTimer !== undefined) window.clearInterval(levelTimer);
       setSpeechLevel(0);
       setVoiceState("idle");
     };
@@ -136,8 +147,31 @@ export default function Home() {
     utterance.onend = finishSpeaking;
     utterance.onerror = finishSpeaking;
     setSpeechLevel(0);
-    setVoiceState("speaking");
-    window.speechSynthesis.speak(utterance);
+    setVoiceState("thinking");
+    let speechQueued = false;
+    let voiceWaitTimer: number | undefined;
+    const queueSpeech = () => {
+      if (speechQueued) return;
+      speechQueued = true;
+      window.speechSynthesis.removeEventListener("voiceschanged", queueSpeech);
+      if (voiceWaitTimer !== undefined) window.clearTimeout(voiceWaitTimer);
+      chooseVoice();
+      // Keep one chosen voice for the whole page session. If the browser never
+      // supplies its voice list, consistently use its built-in default.
+      if (!window.speechSynthesis.getVoices().length) voiceChoiceLockedRef.current = true;
+      levelTimer = window.setInterval(() => {
+        level *= 0.82;
+        if (level < 0.025) level = 0;
+        setSpeechLevel(level);
+      }, 45);
+      setVoiceState("speaking");
+      window.speechSynthesis.speak(utterance);
+    };
+    if (window.speechSynthesis.getVoices().length) queueSpeech();
+    else {
+      window.speechSynthesis.addEventListener("voiceschanged", queueSpeech);
+      voiceWaitTimer = window.setTimeout(queueSpeech, 900);
+    }
   };
 
   const togglePanel = (panel: "chat" | "telemetry" | "focus") => {
@@ -147,6 +181,8 @@ export default function Home() {
   const handleSendMessage = async () => {
     if (!inputMsg.trim() || isSending) return;
     const prompt = inputMsg;
+    const focusedId = selectedNode?.id ?? "cisco";
+    const recentHistory = conversationRef.current.slice(-12);
     const nowTime = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     // Append User Caption
@@ -161,7 +197,7 @@ export default function Home() {
       const res = await fetch(`${API_URL}/api/agent/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: prompt, use_web: true }),
+        body: JSON.stringify({ message: prompt, use_web: true, history: recentHistory, focus_node_id: focusedId }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.detail || `Backend returned HTTP ${res.status}`);
@@ -171,7 +207,18 @@ export default function Home() {
       const answer = { id: `cap-${Date.now()}-res`, sender: "CISCO" as const, text: data.answer, time: resTime };
       setCaptions((prev) => [...prev, answer]);
       setChatMessages((prev) => [...prev, answer]);
+      conversationRef.current = [...recentHistory, { role: "user" as const, content: prompt }, { role: "assistant" as const, content: data.answer }].slice(-12);
       speakReply(data.answer);
+      if (typeof data.memory_node_id === "string") {
+        setSelectedId(data.memory_node_id);
+        setOpenPanels((prev) => ({ ...prev, focus: true }));
+        void fetch(`${API_URL}/api/graph`).then(async (graphRes) => {
+          if (!graphRes.ok) return;
+          const graph = await graphRes.json();
+          if (graph?.nodes) setNodes(graph.nodes);
+          if (graph?.edges) setEdges(graph.edges);
+        }).catch((error) => console.warn("Graph refresh after memory creation failed", error));
+      }
       setEvents((prev) => [
         { id: `evt-${Date.now()}`, type: "memory", title: "Directive Executed", detail: data.answer, timestamp: "just now" },
         ...prev,
@@ -224,7 +271,7 @@ export default function Home() {
           selected={selectedId}
           voiceState={voiceState}
           speechLevel={speechLevel}
-          onSelect={(id) => setSelectedId(id)}
+          onSelect={selectNode}
         />
       </div>
 

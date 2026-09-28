@@ -6,6 +6,7 @@ import hmac
 import os
 from pathlib import Path
 import json
+import re
 import secrets
 from typing import Literal
 from urllib.parse import parse_qs
@@ -53,9 +54,16 @@ class Event(BaseModel):
     timestamp: str
 
 
+class ConversationTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
 class AgentMessage(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     use_web: bool = False
+    history: list[ConversationTurn] = Field(default_factory=list, max_length=12)
+    focus_node_id: str | None = None
 
 
 class AgentAnswer(BaseModel):
@@ -283,7 +291,7 @@ def stop_media_stream(stream_id: str) -> None:
     ))
 
 
-def remember_research(message: str, answer: str, sources: list[SearchResult]) -> str:
+def remember_research(message: str, answer: str, sources: list[SearchResult], parent_id: str = "cisco") -> str:
     node_id = f"research-{secrets.token_hex(4)}"
     index = len(state.nodes)
     state.nodes.append(GraphNode(
@@ -295,7 +303,7 @@ def remember_research(message: str, answer: str, sources: list[SearchResult]) ->
         y=18 + (index * 23) % 65,
         active=True,
     ))
-    state.edges.append(GraphEdge(source="cisco", target=node_id, label="researched"))
+    state.edges.append(GraphEdge(source=parent_id, target=node_id, label="continued" if parent_id != "cisco" else "researched"))
     for source in sources[:3]:
         source_id = f"source-{secrets.token_hex(4)}"
         state.nodes.append(GraphNode(
@@ -393,20 +401,29 @@ async def send_message(payload: AgentMessage) -> Event:
 
 @app.post("/api/agent/ask")
 async def ask_agent(payload: AgentMessage) -> AgentAnswer:
+    focused_node = next((node for node in state.nodes if node.id == payload.focus_node_id), None)
+    parent_id = focused_node.id if focused_node and focused_node.kind != "agent" else "cisco"
     sources = []
-    if payload.use_web:
+    follow_up = bool(payload.history) and re.search(r"\b(?:it|that|those|them|they|these)\b", payload.message.lower()) is not None
+    if payload.use_web and not follow_up:
         try:
             # 3-second timeout guard for web search execution
             sources = await asyncio.wait_for(asyncio.to_thread(search_web, payload.message), timeout=3.0)
         except Exception:
             sources = []
 
-    context = "\n".join(f"- {source.title}: {source.snippet} ({source.url})" for source in sources) if sources else ""
+    context_parts = []
+    if focused_node and focused_node.kind != "agent":
+        context_parts.append(f"The user is focused on this graph topic: {focused_node.label}. Context: {focused_node.detail}")
+    if sources:
+        context_parts.append("Research sources:\n" + "\n".join(f"- {source.title}: {source.snippet} ({source.url})" for source in sources))
+    context = "\n\n".join(context_parts)
+    history = [{"role": turn.role, "content": turn.content} for turn in payload.history]
     
     try:
         # Keep the event loop responsive while allowing for model and free-host cold-start latency.
         answer, provider = await asyncio.wait_for(
-            asyncio.to_thread(agent.respond, payload.message, context), timeout=32.0
+            asyncio.to_thread(agent.respond, payload.message, context, history), timeout=32.0
         )
     except asyncio.TimeoutError:
         answer = "CISCO's AI service took too long to respond. Please try again."
@@ -415,7 +432,7 @@ async def ask_agent(payload: AgentMessage) -> AgentAnswer:
         answer = "CISCO couldn't process the request. Check the backend AI configuration and logs."
         provider = "error"
 
-    memory_node_id = remember_research(payload.message, answer, sources)
+    memory_node_id = remember_research(payload.message, answer, sources, parent_id)
     events.insert(0, Event(
         id=f"evt-{secrets.token_hex(4)}",
         type="memory",
