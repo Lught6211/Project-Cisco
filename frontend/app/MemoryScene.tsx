@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Billboard, Line, OrbitControls, Text } from "@react-three/drei";
+import { Billboard, Line, OrbitControls, Stars, Text } from "@react-three/drei";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Group, Mesh } from "three";
@@ -27,8 +27,8 @@ const nodeTypeColors: Record<string, string> = {
 };
 
 const stateColors: Record<string, string> = {
-  idle: "#52e5da",      // Cyan
-  listening: "#f2b66d", // Amber
+  idle: "#58a6ff",      // Blue
+  listening: "#f2d84b", // Yellow
   thinking: "#b8a3ff",  // Purple
   speaking: "#10b981"   // Green
 };
@@ -69,8 +69,7 @@ export default function MemoryScene({
       <ambientLight intensity={2.0} />
       <pointLight position={[0, 0, 10]} intensity={25} color="#52e5da" />
 
-      {/* High-Tech Vector Grid Background */}
-      <gridHelper args={[40, 40, "#294e50", "#122628"]} position={[0, -4, -3]} rotation={[Math.PI / 3, 0, 0]} />
+      <Stars radius={48} depth={32} count={420} factor={1.4} saturation={0.15} fade speed={0.25} />
 
       {/* Vector Laser Connection Lines */}
       {safeEdges.map((edge) => {

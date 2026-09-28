@@ -382,3 +382,72 @@ body, html {
   align-items: center;
   gap: 6px;
 }
+
+/* Compact orbital workspace, matching the earlier centered HUD layout. */
+.top-bar {
+  left: 50%;
+  right: auto;
+  width: min(1100px, calc(100vw - 48px));
+  transform: translateX(-50%);
+  background: rgba(8, 16, 17, 0.72);
+}
+
+.subheader-overlay {
+  top: 94px;
+  left: max(24px, calc((100vw - 1100px) / 2));
+}
+
+.section-title { display: none; }
+
+.hud-panel {
+  width: 330px;
+  min-width: 260px;
+  max-width: calc(100vw - 32px);
+  min-height: 0;
+  overflow: hidden;
+  background: rgba(8, 22, 22, 0.88);
+  border-color: rgba(82, 229, 218, 0.58);
+  border-radius: 0;
+  box-shadow: 0 0 30px rgba(0, 240, 255, 0.1);
+}
+
+.telemetry-panel { width: 440px; height: 281px; }
+.focus-panel { width: 310px; height: 230px; }
+.chat-panel { width: 440px; height: 281px; }
+.hud-header { min-height: 34px; padding: 8px 13px; background: rgba(82, 229, 218, 0.055); }
+.hud-header button { padding: 2px 4px; }
+.hud-body { padding: 13px 20px; }
+.telemetry-panel .hud-body { height: calc(100% - 34px); }
+.telemetry-list { height: 100%; max-height: none; overflow-y: auto; }
+.telemetry-item {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(82, 229, 218, 0.12);
+  border-radius: 0;
+  margin: 0;
+  padding: 10px 12px;
+}
+.telemetry-item:last-child { border-bottom: 0; }
+.captions-feed { max-height: 100px; }
+.right-dock { gap: 8px; padding: 8px; border-radius: 16px; }
+.right-dock button { border-radius: 50%; }
+.right-dock button.active-mic { border-color: #f2d84b; background: rgba(242, 216, 75, 0.2); color: #f2d84b; box-shadow: 0 0 14px rgba(242, 216, 75, 0.4); }
+.voice-pill { border-radius: 0; }
+.voice-pill.voice-idle { color: #58a6ff; border-color: rgba(88, 166, 255, 0.55); }
+.voice-pill.voice-listening { color: #f2d84b; border-color: rgba(242, 216, 75, 0.65); box-shadow: 0 0 12px rgba(242, 216, 75, 0.2); }
+.voice-pill.voice-thinking { color: #b8a3ff; border-color: rgba(184, 163, 255, 0.65); box-shadow: 0 0 12px rgba(184, 163, 255, 0.2); }
+.voice-pill.voice-speaking { color: #10b981; border-color: rgba(16, 185, 129, 0.65); box-shadow: 0 0 12px rgba(16, 185, 129, 0.2); }
+
+@media (max-width: 900px) {
+  .top-bar { width: calc(100vw - 32px); }
+  .telemetry-panel, .chat-panel { width: min(440px, calc(100vw - 32px)); }
+  .focus-panel { width: min(310px, calc(100vw - 32px)); }
+  .subheader-overlay { left: 16px; top: 68px; }
+}
+
+@media (max-width: 560px) {
+  .telemetry-panel { height: 230px; }
+  .chat-panel { height: 260px; }
+  .right-dock { right: 8px; }
+  .bottom-bar { padding: 0 12px; }
+}

@@ -55,9 +55,18 @@ export default function Home() {
   });
 
   // Draggable Window Positions
-  const [chatPos, setChatPos] = useState({ x: 28, y: 340 });
-  const [telemetryPos, setTelemetryPos] = useState({ x: 28, y: 80 });
-  const [focusPos, setFocusPos] = useState({ x: 480, y: 80 });
+  const [chatPos, setChatPos] = useState({ x: 70, y: 472 });
+  const [telemetryPos, setTelemetryPos] = useState({ x: 70, y: 152 });
+  const [focusPos, setFocusPos] = useState({ x: 860, y: 120 });
+
+  useEffect(() => {
+    if (window.innerWidth <= 900) {
+      setTelemetryPos({ x: 16, y: 120 });
+      setFocusPos({ x: 16, y: 420 });
+      setChatPos({ x: 16, y: Math.max(380, window.innerHeight - 320) });
+      setOpenPanels((panels) => ({ ...panels, focus: false }));
+    }
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -205,7 +214,7 @@ export default function Home() {
 
       {/* 1. System Telemetry Window */}
       {openPanels.telemetry && (
-        <div className="hud-panel draggable-panel" style={{ top: `${telemetryPos.y}px`, left: `${telemetryPos.x}px` }}>
+        <div className="hud-panel telemetry-panel draggable-panel" style={{ top: `${telemetryPos.y}px`, left: `${telemetryPos.x}px` }}>
           <div className="hud-corner top-left" />
           <div className="hud-corner top-right" />
           <div className="hud-corner bottom-left" />
@@ -229,7 +238,7 @@ export default function Home() {
 
       {/* 2. Focus Node Inspection Window */}
       {openPanels.focus && (
-        <div className="hud-panel draggable-panel" style={{ top: `${focusPos.y}px`, left: `${focusPos.x}px` }}>
+        <div className="hud-panel focus-panel draggable-panel" style={{ top: `${focusPos.y}px`, left: `${focusPos.x}px` }}>
           <div className="hud-corner top-left" />
           <div className="hud-corner top-right" />
           <div className="hud-corner bottom-left" />
@@ -273,7 +282,7 @@ export default function Home() {
 
       {/* 3. Directive Input & Live Dialogue Captions Panel */}
       {openPanels.chat && (
-        <div className="hud-panel draggable-panel chat-panel" style={{ top: `${chatPos.y}px`, left: `${chatPos.x}px` }}>
+        <div className="hud-panel chat-panel draggable-panel" style={{ top: `${chatPos.y}px`, left: `${chatPos.x}px` }}>
           <div className="hud-corner top-left" />
           <div className="hud-corner top-right" />
           <div className="hud-corner bottom-left" />
@@ -372,7 +381,7 @@ export default function Home() {
           <span className="legend-item"><span className="dot gray" /> LONG-TERM MEMORY</span>
         </div>
         <div className="hint">DRAG TO ORBIT ↗ SCROLL TO ZOOM</div>
-        <button className="voice-pill" onClick={toggleMic}>
+        <button className={`voice-pill voice-${voiceState}`} onClick={toggleMic}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
           </svg>
