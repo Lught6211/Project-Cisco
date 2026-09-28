@@ -41,6 +41,7 @@ export default function Home() {
 
   const [selectedId, setSelectedId] = useState<string>("cisco");
   const [voiceState, setVoiceState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
+  const [speechLevel, setSpeechLevel] = useState(0);
   const [inputMsg, setInputMsg] = useState("");
   const [isSending, setIsSending] = useState(false);
 
@@ -98,8 +99,20 @@ export default function Home() {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = navigator.language || "en-US";
-    utterance.onend = () => setVoiceState("idle");
-    utterance.onerror = () => setVoiceState("idle");
+    let phase = 0;
+    const levelTimer = window.setInterval(() => {
+      phase += 0.34;
+      const syllable = Math.max(0, Math.sin(phase * 2.15) * Math.sin(phase * 0.47));
+      setSpeechLevel(0.16 + syllable * 0.84);
+    }, 45);
+    const finishSpeaking = () => {
+      window.clearInterval(levelTimer);
+      setSpeechLevel(0);
+      setVoiceState("idle");
+    };
+    utterance.volume = 1;
+    utterance.onend = finishSpeaking;
+    utterance.onerror = finishSpeaking;
     setVoiceState("speaking");
     window.speechSynthesis.speak(utterance);
   };
@@ -187,6 +200,7 @@ export default function Home() {
           edges={edges}
           selected={selectedId}
           voiceState={voiceState}
+          speechLevel={speechLevel}
           onSelect={(id) => setSelectedId(id)}
         />
       </div>

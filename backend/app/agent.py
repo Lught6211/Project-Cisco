@@ -27,6 +27,12 @@ class AgentRuntime:
             try:
                 return self._gemini_response(message, context), "gemini"
             except (OSError, ValueError, KeyError, error.URLError, error.HTTPError) as exc:
+                if self.api_key or self.base_url != "https://api.openai.com/v1":
+                    provider = "ollama" if "localhost:11434" in self.base_url else "openai-compatible"
+                    try:
+                        return self._compatible_response(message, context), provider
+                    except (OSError, ValueError, KeyError, error.URLError, error.HTTPError) as fallback_exc:
+                        logger.warning("Secondary AI provider %s also failed: %s", provider, fallback_exc)
                 return self._provider_error("Gemini", exc), "gemini-error"
 
         if self.api_key or self.base_url != "https://api.openai.com/v1":
@@ -50,13 +56,16 @@ class AgentRuntime:
             "contents": [{"role": "user", "parts": [{"text": message}]}],
             "generationConfig": {"maxOutputTokens": 700},
         }).encode("utf-8")
-        try:
-            result = self._send_gemini_request(self.gemini_model, payload)
-        except error.HTTPError as exc:
-            if exc.code != 404 or self.gemini_model == "gemini-3.8-flash":
-                raise
-            logger.warning("Gemini model %s was not found; retrying with gemini-3.8-flash", self.gemini_model)
-            result = self._send_gemini_request("gemini-3.8-flash", payload)
+        fallback_models = [model for model in ("gemini-3.8-flash", "gemini-3.5-flash-lite") if model != self.gemini_model]
+        for index, model in enumerate([self.gemini_model, *fallback_models]):
+            try:
+                result = self._send_gemini_request(model, payload)
+                break
+            except error.HTTPError as exc:
+                retryable = exc.code in (404, 429, 502, 503)
+                if not retryable or index == len(fallback_models):
+                    raise
+                logger.warning("Gemini model %s returned HTTP %s; retrying with a fallback model", model, exc.code)
         parts = result["candidates"][0]["content"]["parts"]
         answer = "\n".join(part.get("text", "") for part in parts).strip()
         if not answer:

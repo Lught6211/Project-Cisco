@@ -57,7 +57,7 @@ Install Ollama from https://ollama.com, then download the recommended local mode
 ollama pull llama3.2
 ```
 
-Copy `backend/.env.example` to `backend/.env`. The included `OPENAI_BASE_URL` points CISCO at Ollama, so no paid API key is needed. Start Ollama before the backend. To use hosted Gemini instead, add a Gemini API key and set `GEMINI_API_KEY`; Gemini takes priority over the Ollama settings.
+Copy `backend/.env.example` to `backend/.env`. The included `OPENAI_BASE_URL` points CISCO at Ollama, so local development needs no paid API key when Ollama is running. The earlier quick-response implementation only returned canned greetings and acknowledgments; the real AI provider connection was added later. For hosted deployment, configure `GEMINI_API_KEY`; Gemini is tried first, with the configured OpenAI-compatible provider (including Ollama) used as a fallback when available. Gemini automatically retries fallback models during transient capacity or model errors.
 
 To send an agent directive:
 
@@ -71,7 +71,7 @@ If Ollama is unavailable, CISCO displays a provider connection error in the chat
 
 Use the dashboard directive box to ask a question. The app gathers free Wikipedia/DuckDuckGo context for the request, sends it to the configured model, stores the topic and up to three sources in the memory graph, and returns the answer. Replies are spoken with the browser's built-in speech synthesis and CISCO's core turns green while speaking. The microphone control currently changes the listening indicator; speech recognition is not connected to the backend chat flow.
 
-The dashboard is responsive and installable as a CiscoAI PWA on desktop and mobile browsers. The memory graph is a Three.js scene with JARVIS-style spatial nodes connected by 3D relationship vectors. Its spatial reference is a cubic point lattice with no connecting grid lines or star field; it expands to fit the graph. Drag to orbit around nodes, pinch or scroll to zoom, and tap a node to focus it. A native packaged mobile app can be added later with the same API, but the current PWA requires no app-store account.
+The dashboard is responsive and installable as a CiscoAI PWA on desktop and mobile browsers. The memory graph is a Three.js scene with JARVIS-style spatial nodes connected by 3D relationship vectors. Its spatial reference is a cubic point lattice with no connecting grid lines or star field; it expands to fit the graph and pulses with the speaking animation. Drag to orbit around nodes, pinch or scroll to zoom, and tap a node to focus it. A native packaged mobile app can be added later with the same API, but the current PWA requires no app-store account.
 
 The desktop dashboard is a full-viewport 3D graph surface. Telemetry, focus, and chat panels are closed at startup; use the circular controls on the right edge to open them. Each panel can be dragged, resized, and closed. Chat shows the conversation, while live captions appear separately at the bottom-left on a transparent background. Cisco's core changes color by state: blue while idle, yellow while listening, purple while thinking, and green while speaking. Node names billboard toward the camera at every angle, while relationship depth changes node geometry, edge color, line weight, and dash pattern.
 

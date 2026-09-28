@@ -38,12 +38,14 @@ export default function MemoryScene({
   edges = [],
   selected,
   voiceState,
+  speechLevel,
   onSelect
 }: {
   nodes?: MemoryNode[];
   edges?: MemoryEdge[];
   selected: string;
   voiceState: "idle" | "listening" | "thinking" | "speaking";
+  speechLevel: number;
   onSelect: (id: string) => void;
 }) {
   const safeNodes = Array.isArray(nodes) ? nodes : [];
@@ -77,7 +79,7 @@ export default function MemoryScene({
       <ambientLight intensity={2.0} />
       <pointLight position={[0, 0, 10]} intensity={25} color="#52e5da" />
 
-      <VectorSpaceGrid extent={spaceExtent} />
+      <VectorSpaceGrid extent={spaceExtent} voiceState={voiceState} speechLevel={speechLevel} />
 
       {/* Vector Laser Connection Lines */}
       {safeEdges.map((edge) => {
@@ -105,6 +107,7 @@ export default function MemoryScene({
           level={relationshipLevels.get(node.id) ?? 1}
           active={selected === node.id || node.active === true}
           voiceState={voiceState}
+          speechLevel={speechLevel}
           onSelect={onSelect}
         />
       ))}
@@ -114,8 +117,9 @@ export default function MemoryScene({
   );
 }
 
-function VectorSpaceGrid({ extent }: { extent: number }) {
+function VectorSpaceGrid({ extent, voiceState, speechLevel }: { extent: number; voiceState: string; speechLevel: number }) {
   const ref = useRef<THREE.Points>(null);
+  const materialRef = useRef<THREE.PointsMaterial>(null);
   const geometry = useMemo(() => {
     const divisions = 14;
     const halfSize = 7;
@@ -136,18 +140,69 @@ function VectorSpaceGrid({ extent }: { extent: number }) {
     return result;
   }, []);
 
-  useFrame(({ clock }, delta) => {
+  useFrame((_, delta) => {
     if (!ref.current) return;
-    const time = clock.getElapsedTime();
-    const target = 0.72 + Math.min(extent / 8, 0.95) + Math.sin(time * 2) * 0.04;
+    const speaking = voiceState === "speaking";
+    const target = 0.72 + Math.min(extent / 8, 0.95) + (speaking ? 0.04 + speechLevel * 0.1 : 0);
     const scale = THREE.MathUtils.damp(ref.current.scale.x, target, 1.8, delta);
     ref.current.scale.setScalar(scale);
+    if (materialRef.current) materialRef.current.opacity = speaking ? 0.34 + speechLevel * 0.35 : 0.34;
   });
 
   return (
     <points ref={ref} geometry={geometry} renderOrder={0}>
-      <pointsMaterial color="#368d91" size={2.2} sizeAttenuation={false} transparent opacity={0.34} depthWrite={false} />
+      <pointsMaterial ref={materialRef} color="#368d91" size={2.2} sizeAttenuation={false} transparent opacity={0.34} depthWrite={false} />
     </points>
+  );
+}
+
+function AudioWaveform({ color, voiceState, speechLevel }: { color: string; voiceState: string; speechLevel: number }) {
+  const geometry = useMemo(() => {
+    const sampleCount = 96;
+    const vertices = new Float32Array(3 * sampleCount * 2 * 3);
+    const result = new THREE.BufferGeometry();
+    result.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
+    return result;
+  }, []);
+  const materialRef = useRef<THREE.LineBasicMaterial>(null);
+
+  useFrame(({ clock }) => {
+    const attribute = geometry.getAttribute("position") as THREE.BufferAttribute;
+    const vertices = attribute.array as Float32Array;
+    const time = clock.getElapsedTime();
+    const speaking = voiceState === "speaking";
+    const sampleCount = 96;
+    let cursor = 0;
+
+    for (let plane = 0; plane < 3; plane++) {
+      for (let i = 0; i < sampleCount; i++) {
+        const angle = (i / sampleCount) * Math.PI * 2;
+        const carrier = 0.5 + 0.5 * Math.sin(i * 0.43 - time * 15 + plane * 1.7);
+        const ripple = speaking ? 0.035 + speechLevel * (0.07 + carrier * 0.3) : 0.018;
+        const innerRadius = 1.04;
+        const outerRadius = innerRadius + ripple;
+        const c = Math.cos(angle);
+        const s = Math.sin(angle);
+        const coordinates = plane === 0
+          ? [[innerRadius * c, innerRadius * s, 0], [outerRadius * c, outerRadius * s, 0]]
+          : plane === 1
+            ? [[innerRadius * c, 0, innerRadius * s], [outerRadius * c, 0, outerRadius * s]]
+            : [[0, innerRadius * c, innerRadius * s], [0, outerRadius * c, outerRadius * s]];
+        for (const point of coordinates) {
+          vertices[cursor++] = point[0];
+          vertices[cursor++] = point[1];
+          vertices[cursor++] = point[2];
+        }
+      }
+    }
+    attribute.needsUpdate = true;
+    if (materialRef.current) materialRef.current.opacity = speaking ? 0.86 : 0.28;
+  });
+
+  return (
+    <lineSegments geometry={geometry} renderOrder={2} frustumCulled={false}>
+      <lineBasicMaterial ref={materialRef} color={color} transparent opacity={0.28} depthWrite={false} />
+    </lineSegments>
   );
 }
 
@@ -157,6 +212,7 @@ function JarvisNodeVisual({
   level, 
   active, 
   voiceState, 
+  speechLevel,
   onSelect 
 }: { 
   node: MemoryNode; 
@@ -164,6 +220,7 @@ function JarvisNodeVisual({
   level: number; 
   active: boolean; 
   voiceState: "idle" | "listening" | "thinking" | "speaking"; 
+  speechLevel: number;
   onSelect: (id: string) => void 
 }) {
   const groupRef = useRef<Group>(null);
@@ -184,7 +241,7 @@ function JarvisNodeVisual({
     if (ring2Ref.current) ring2Ref.current.rotation.z -= delta * (isAgent ? 0.7 : 0.3);
 
     const pulse = isAgent 
-      ? Math.sin(time * (voiceState === "speaking" ? 14 : voiceState === "listening" ? 8 : 2)) * 0.05 
+      ? voiceState === "speaking" ? speechLevel * 0.11 : Math.sin(time * (voiceState === "listening" ? 8 : 2)) * 0.035
       : Math.sin(time * 1.5 + level) * 0.03;
       
     groupRef.current.scale.setScalar((active ? 1.22 : 1.0) + pulse);
@@ -203,6 +260,7 @@ function JarvisNodeVisual({
             <sphereGeometry args={[0.82, 48, 48]} />
             <meshBasicMaterial color={color} wireframe transparent opacity={0.35} />
           </mesh>
+          <AudioWaveform color={color} voiceState={voiceState} speechLevel={speechLevel} />
         </>
       ) : (
         /* MEMORY NODES: Geometry Polygon Density Directly Dictated by Relationship Level */
