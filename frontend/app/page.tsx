@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import "./scene.css";
 
@@ -13,6 +14,7 @@ type Edge = { source: string; target: string; label: string };
 type EventItem = { id: string; type: string; title: string; detail: string; timestamp: string };
 type CaptionItem = { id: string; sender: "USER" | "CISCO" | "ULTRON"; text: string; time: string };
 type ConversationTurn = { role: "user" | "assistant"; content: string };
+type CorruptionCode = { id: number; value: string; left: number; top: number };
 
 export default function Home() {
   const [nodes, setNodes] = useState<Node[]>([
@@ -49,6 +51,60 @@ export default function Home() {
   const [inputMsg, setInputMsg] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [ultronMode, setUltronMode] = useState(false);
+  const [corruption, setCorruption] = useState(0);
+  const corruptionRef = useRef(0);
+  const [corruptionCodes, setCorruptionCodes] = useState<CorruptionCode[]>([]);
+
+  useEffect(() => {
+    const target = ultronMode ? 1 : 0;
+    const from = corruptionRef.current;
+    if (from === target) return;
+    const startedAt = performance.now();
+    const duration = ultronMode ? 6200 : 2400;
+    const timer = window.setInterval(() => {
+      const progress = Math.min(1, (performance.now() - startedAt) / duration);
+      const value = from + (target - from) * progress;
+      corruptionRef.current = value;
+      setCorruption(value);
+      if (progress >= 1) window.clearInterval(timer);
+    }, 50);
+    return () => window.clearInterval(timer);
+  }, [ultronMode]);
+
+  useEffect(() => {
+    if (!ultronMode) {
+      setCorruptionCodes([]);
+      return;
+    }
+    let alive = true;
+    const timers = new Set<number>();
+    const later = (callback: () => void, delay: number) => {
+      const timer = window.setTimeout(() => {
+        timers.delete(timer);
+        callback();
+      }, delay);
+      timers.add(timer);
+    };
+    const deployFragment = () => later(() => {
+      if (!alive) return;
+      const id = Date.now() + Math.random();
+      const digits = Array.from({ length: 5 }, () => Math.floor(Math.random() * 65536).toString(16).padStart(4, "0")).join(" ");
+      setCorruptionCodes((items) => [...items.slice(-3), {
+        id,
+        value: `0x${Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0")}\n${digits}`,
+        left: 20 + Math.random() * 62,
+        top: 18 + Math.random() * 62,
+      }]);
+      later(() => setCorruptionCodes((items) => items.filter((item) => item.id !== id)), 1500);
+      deployFragment();
+    }, 900 + Math.random() * 2200);
+    deployFragment();
+    return () => {
+      alive = false;
+      timers.forEach(window.clearTimeout);
+      setCorruptionCodes([]);
+    };
+  }, [ultronMode]);
 
   // Independent Open State for Multiple Floating HUD Panels
   const [openPanels, setOpenPanels] = useState({
@@ -328,7 +384,7 @@ export default function Home() {
   };
 
   return (
-    <div className={`cisco-container${ultronMode ? " ultron-mode" : ""}`}>
+    <div className={`cisco-container${ultronMode ? " ultron-mode" : ""}${corruption > 0.005 ? " corruption-active" : ""}`} style={{ "--ultron-corruption": `${corruption * 100}%` } as CSSProperties & { "--ultron-corruption": string }}>
       {/* 3D Spatial Background */}
       <div className="canvas-layer">
         <MemoryScene
@@ -338,9 +394,15 @@ export default function Home() {
           voiceState={voiceState}
           speechLevel={speechLevel}
           ultronMode={ultronMode}
+          corruption={corruption}
           onSelect={selectNode}
         />
       </div>
+      {corruptionCodes.length > 0 && (
+        <div className="corruption-code-layer" aria-hidden="true">
+          {corruptionCodes.map((fragment) => <div key={fragment.id} className="corruption-code" style={{ left: `${fragment.left}%`, top: `${fragment.top}%` }}>{fragment.value}</div>)}
+        </div>
+      )}
 
       {/* Top Header Bar */}
       <header className="top-bar">

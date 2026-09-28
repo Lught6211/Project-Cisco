@@ -42,6 +42,7 @@ export default function MemoryScene({
   voiceState,
   speechLevel,
   ultronMode = false,
+  corruption = 0,
   onSelect
 }: {
   nodes?: MemoryNode[];
@@ -50,6 +51,7 @@ export default function MemoryScene({
   voiceState: "idle" | "listening" | "thinking" | "speaking";
   speechLevel: number;
   ultronMode?: boolean;
+  corruption?: number;
   onSelect: (id: string) => void;
 }) {
   const safeNodes = Array.isArray(nodes) ? nodes : [];
@@ -187,7 +189,7 @@ export default function MemoryScene({
       <ambientLight intensity={2.0} />
       <pointLight position={[0, 0, 10]} intensity={25} color="#52e5da" />
 
-      <VectorSpaceGrid extent={spaceExtent} voiceState={voiceState} speechLevel={speechLevel} />
+      <VectorSpaceGrid extent={spaceExtent} voiceState={voiceState} speechLevel={speechLevel} ultronMode={ultronMode} corruption={corruption} />
 
       <OrbitalDrift orbitRef={orbitRef}>
         {/* Parent links glow clearly; secondary relationships stay in the background. */}
@@ -199,7 +201,7 @@ export default function MemoryScene({
             <Line
               key={`${edge.source}-${edge.target}`}
               points={[from, to]}
-              color={parentLink ? "#52e5da" : "#368d91"}
+              color={new THREE.Color(parentLink ? "#52e5da" : "#368d91").lerp(new THREE.Color("#ff263f"), corruption * 0.88)}
               transparent
               opacity={parentLink ? 0.42 : 0.09}
               lineWidth={parentLink ? 1.2 : 0.6}
@@ -219,6 +221,7 @@ export default function MemoryScene({
             voiceState={voiceState}
             speechLevel={speechLevel}
             ultronMode={ultronMode}
+            corruption={corruption}
             onSelect={onSelect}
           />
         ))}
@@ -238,7 +241,7 @@ function OrbitalDrift({ children, orbitRef }: { children: ReactNode; orbitRef: R
   return <group ref={orbitRef}>{children}</group>;
 }
 
-function VectorSpaceGrid({ extent, voiceState, speechLevel }: { extent: number; voiceState: string; speechLevel: number }) {
+function VectorSpaceGrid({ extent, voiceState, speechLevel, ultronMode, corruption }: { extent: number; voiceState: string; speechLevel: number; ultronMode: boolean; corruption: number }) {
   const ref = useRef<THREE.Points>(null);
   const materialRef = useRef<THREE.PointsMaterial>(null);
   const geometry = useMemo(() => {
@@ -261,18 +264,26 @@ function VectorSpaceGrid({ extent, voiceState, speechLevel }: { extent: number; 
     return result;
   }, []);
 
-  useFrame((_, delta) => {
+  useFrame(({ clock }, delta) => {
     if (!ref.current) return;
+    const time = clock.getElapsedTime();
+    const cycle = Math.floor(time / 4.7);
+    const seed = Math.abs(Math.sin(cycle * 37.19) * 45831.21) % 1;
+    const start = 2.4 + seed * 1.9;
+    const phase = time % 4.7;
+    const latticeGlitch = ultronMode && ((phase > start && phase < start + 0.13) || (phase > start + 0.22 && phase < start + 0.29));
     const speaking = voiceState === "speaking";
     const target = 0.72 + Math.min(extent / 8, 0.95) + (speaking ? speechLevel * 0.16 : 0);
-    const scale = THREE.MathUtils.damp(ref.current.scale.x, target, 1.8, delta);
+    const scale = THREE.MathUtils.damp(ref.current.scale.x, target + (latticeGlitch ? 0.09 : 0), latticeGlitch ? 18 : 1.8, delta);
     ref.current.scale.setScalar(scale);
-    if (materialRef.current) materialRef.current.opacity = speaking ? 0.34 + speechLevel * 0.35 : 0.34;
+    ref.current.position.set(latticeGlitch ? Math.sin(time * 121) * 0.06 : 0, latticeGlitch ? Math.cos(time * 97) * 0.035 : 0, 0);
+    if (materialRef.current) materialRef.current.opacity = (speaking ? 0.34 + speechLevel * 0.35 : 0.34) + (latticeGlitch ? 0.3 : 0);
   });
 
+  const latticeColor = new THREE.Color("#368d91").lerp(new THREE.Color("#ff263f"), corruption * 0.88);
   return (
     <points ref={ref} geometry={geometry} renderOrder={0}>
-      <pointsMaterial ref={materialRef} color="#368d91" size={2.2} sizeAttenuation={false} transparent opacity={0.34} depthWrite={false} />
+      <pointsMaterial ref={materialRef} color={latticeColor} size={2.2} sizeAttenuation={false} transparent opacity={0.34} depthWrite={false} />
     </points>
   );
 }
@@ -337,6 +348,7 @@ function JarvisNodeVisual({
   voiceState, 
   speechLevel,
   ultronMode,
+  corruption,
   onSelect 
 }: { 
   node: MemoryNode; 
@@ -348,6 +360,7 @@ function JarvisNodeVisual({
   voiceState: "idle" | "listening" | "thinking" | "speaking"; 
   speechLevel: number;
   ultronMode: boolean;
+  corruption: number;
   onSelect: (id: string) => void 
 }) {
   const groupRef = useRef<Group>(null);
@@ -357,30 +370,38 @@ function JarvisNodeVisual({
   const spawnProgress = useRef<number | null>(null);
   const spawnOrbRef = useRef<Group>(null);
   const [hovered, setHovered] = useState(false);
+  const nodeSeed = useMemo(() => {
+    let hash = 2166136261;
+    for (const character of node.id) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+    return (hash >>> 0) / 4294967295;
+  }, [node.id]);
 
   useEffect(() => {
     if (spawnFrom) spawnProgress.current = 0;
   }, [spawnFrom]);
   
   const isAgent = node.kind === "agent";
-  const color = isAgent 
-    ? (ultronMode ? "#ff263f" : stateColors[voiceState] || "#52e5da")
-    : (nodeTypeColors[node.kind] || "#6e9695");
+  const nodeCorruption = isAgent ? corruption : THREE.MathUtils.clamp((corruption - nodeSeed * 0.55) / 0.45, 0, 1);
+  const normalColor = isAgent ? (stateColors[voiceState] || "#52e5da") : (nodeTypeColors[node.kind] || "#6e9695");
+  const color = isAgent && ultronMode
+    ? "#ff263f"
+    : new THREE.Color(normalColor).lerp(new THREE.Color("#ff263f"), nodeCorruption * (isAgent ? 1 : 0.88)).getStyle();
 
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return;
     const time = clock.getElapsedTime();
 
-    const glitchCycle = Math.floor(time / 4.7);
-    const glitchPhase = time % 4.7;
-    const glitchSeed = Math.abs(Math.sin(glitchCycle * 91.713) * 43758.5453) % 1;
-    const glitchStart = 1.4 + glitchSeed * 2.7;
-    const glitching = ultronMode && isAgent && (
+    const nodeTime = time + nodeSeed * 4.7;
+    const glitchCycle = Math.floor(nodeTime / 4.7);
+    const glitchPhase = nodeTime % 4.7;
+    const glitchSeed = Math.abs(Math.sin(glitchCycle * 91.713 + nodeSeed * 31) * 43758.5453) % 1;
+    const glitchStart = 0.7 + glitchSeed * 3.4;
+    const glitching = ultronMode && nodeCorruption > 0.08 && (
       (glitchPhase >= glitchStart && glitchPhase < glitchStart + 0.12) ||
       (glitchPhase >= glitchStart + 0.19 && glitchPhase < glitchStart + 0.25)
     );
 
-    if (isAgent && ultronMode && spawnProgress.current === null) {
+    if (ultronMode && spawnProgress.current === null) {
       const twitch = glitching ? Math.sin(time * 89) * 0.1 : 0;
       groupRef.current.position.set(position[0] + twitch, position[1] + (glitching ? Math.cos(time * 73) * 0.055 : 0), position[2]);
       groupRef.current.visible = !glitching || Math.sin(time * 103) > -0.7;
@@ -389,7 +410,7 @@ function JarvisNodeVisual({
         glitchGhostRef.current.position.set(Math.sin(time * 83) * 0.18, Math.cos(time * 71) * 0.08, 0.025);
         glitchGhostRef.current.rotation.z = Math.sin(time * 37) * 0.06;
       }
-    } else if (isAgent && !ultronMode) {
+    } else if (!ultronMode) {
       groupRef.current.position.set(...position);
       groupRef.current.visible = true;
       if (glitchGhostRef.current) glitchGhostRef.current.visible = false;
@@ -487,6 +508,18 @@ function JarvisNodeVisual({
           <icosahedronGeometry args={[0.075, 1]} />
           <meshBasicMaterial color={color} transparent opacity={active ? 0.8 : 0.48} />
         </mesh>
+        {nodeCorruption > 0.08 && (
+          <group ref={glitchGhostRef} visible={false}>
+            <mesh>
+              <icosahedronGeometry args={[0.32, 1]} />
+              <meshBasicMaterial color="#23efff" wireframe transparent opacity={0.42} depthWrite={false} />
+            </mesh>
+            <mesh rotation={[0.1, 0, 0.08]}>
+              <torusGeometry args={[0.43, 0.014, 8, 32]} />
+              <meshBasicMaterial color="#ff3154" transparent opacity={0.72} depthWrite={false} />
+            </mesh>
+          </group>
+        )}
         <mesh rotation={[Math.PI / 2.4, 0.25, 0]}>
           <torusGeometry args={[0.34, 0.009, 8, 48]} />
           <meshBasicMaterial color={color} transparent opacity={active ? 0.68 : 0.34} />
