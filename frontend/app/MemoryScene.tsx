@@ -41,6 +41,7 @@ export default function MemoryScene({
   selected,
   voiceState,
   speechLevel,
+  ultronMode = false,
   onSelect
 }: {
   nodes?: MemoryNode[];
@@ -48,6 +49,7 @@ export default function MemoryScene({
   selected: string;
   voiceState: "idle" | "listening" | "thinking" | "speaking";
   speechLevel: number;
+  ultronMode?: boolean;
   onSelect: (id: string) => void;
 }) {
   const safeNodes = Array.isArray(nodes) ? nodes : [];
@@ -216,6 +218,7 @@ export default function MemoryScene({
             focused={selected === node.id}
             voiceState={voiceState}
             speechLevel={speechLevel}
+            ultronMode={ultronMode}
             onSelect={onSelect}
           />
         ))}
@@ -333,6 +336,7 @@ function JarvisNodeVisual({
   focused,
   voiceState, 
   speechLevel,
+  ultronMode,
   onSelect 
 }: { 
   node: MemoryNode; 
@@ -343,6 +347,7 @@ function JarvisNodeVisual({
   focused: boolean;
   voiceState: "idle" | "listening" | "thinking" | "speaking"; 
   speechLevel: number;
+  ultronMode: boolean;
   onSelect: (id: string) => void 
 }) {
   const groupRef = useRef<Group>(null);
@@ -358,12 +363,21 @@ function JarvisNodeVisual({
   
   const isAgent = node.kind === "agent";
   const color = isAgent 
-    ? (stateColors[voiceState] || "#52e5da") 
+    ? (ultronMode ? "#ff263f" : stateColors[voiceState] || "#52e5da")
     : (nodeTypeColors[node.kind] || "#6e9695");
 
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return;
     const time = clock.getElapsedTime();
+
+    if (isAgent && ultronMode && spawnProgress.current === null) {
+      const twitch = Math.sin(time * 43) * 0.024 + Math.sin(time * 79) * 0.012;
+      groupRef.current.position.set(position[0] + twitch, position[1] + Math.cos(time * 61) * 0.018, position[2]);
+      groupRef.current.visible = Math.sin(time * 31) + Math.sin(time * 57) < 1.82;
+    } else if (isAgent && !ultronMode) {
+      groupRef.current.position.set(...position);
+      groupRef.current.visible = true;
+    }
 
     if (spawnProgress.current !== null) {
       spawnProgress.current = Math.min(1, spawnProgress.current + delta / 0.95);
@@ -393,7 +407,7 @@ function JarvisNodeVisual({
     if (ring2Ref.current) ring2Ref.current.rotation.z -= delta * (isAgent ? 0.7 : 0.3);
 
     const pulse = isAgent
-      ? voiceState === "speaking" ? speechLevel * 0.16 : Math.sin(time * (voiceState === "listening" ? 8 : 2)) * 0.035
+      ? ultronMode ? Math.sin(time * 24) * 0.22 : voiceState === "speaking" ? speechLevel * 0.16 : Math.sin(time * (voiceState === "listening" ? 8 : 2)) * 0.035
       : Math.sin(time * 1.2 + level) * 0.018;
       
     const spawnScale = spawnProgress.current === null ? 1 : Math.max(0.02, 1 - (1 - spawnProgress.current) ** 2);
@@ -472,8 +486,8 @@ function JarvisNodeVisual({
 
       {isAgent ? (
         <Billboard follow>
-          <Text position={[0.95, 0.18, 0]} fontSize={0.22} color="#ffffff" anchorX="left" anchorY="middle" outlineWidth={0.015} outlineColor="#081011">
-            {node.label}
+          <Text position={[0.95, 0.18, 0]} fontSize={0.22} color={ultronMode ? "#ff263f" : "#ffffff"} anchorX="left" anchorY="middle" outlineWidth={0.015} outlineColor="#081011">
+            {ultronMode ? "ULTRON" : node.label}
           </Text>
           <Text position={[0.95, -0.02, 0]} fontSize={0.08} color={color} anchorX="left" anchorY="middle" letterSpacing={0.1}>
             {`// ${node.kind.toUpperCase()}`}

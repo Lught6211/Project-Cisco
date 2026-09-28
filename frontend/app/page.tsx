@@ -11,7 +11,7 @@ const API_URL = (process.env.NEXT_PUBLIC_API_URL || "https://cisco-backend-yve2.
 type Node = { id: string; label: string; kind: string; x: number; y: number; confidence?: number; relationship_count?: number; detail?: string; active?: boolean };
 type Edge = { source: string; target: string; label: string };
 type EventItem = { id: string; type: string; title: string; detail: string; timestamp: string };
-type CaptionItem = { id: string; sender: "USER" | "CISCO"; text: string; time: string };
+type CaptionItem = { id: string; sender: "USER" | "CISCO" | "ULTRON"; text: string; time: string };
 type ConversationTurn = { role: "user" | "assistant"; content: string };
 
 export default function Home() {
@@ -48,6 +48,7 @@ export default function Home() {
   const [speechLevel, setSpeechLevel] = useState(0);
   const [inputMsg, setInputMsg] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [ultronMode, setUltronMode] = useState(false);
 
   // Independent Open State for Multiple Floating HUD Panels
   const [openPanels, setOpenPanels] = useState({
@@ -62,21 +63,20 @@ export default function Home() {
   const [focusPos, setFocusPos] = useState({ x: 0, y: 112 });
 
   useEffect(() => {
-    if (window.innerWidth <= 900) {
-      setTelemetryPos({ x: 16, y: 98 });
-      setFocusPos({ x: 16, y: 98 });
-      setChatPos({ x: 16, y: 570 });
-    }
-  }, []);
-
-  useEffect(() => {
-    const placeInspector = () => {
-      if (window.innerWidth > 900) setFocusPos({ x: Math.max(16, window.innerWidth - 342), y: 112 });
-      else setFocusPos((position) => ({ ...position, x: 16 }));
+    const placePanels = () => {
+      if (window.innerWidth > 900) {
+        setTelemetryPos({ x: 70, y: 152 });
+        setFocusPos({ x: Math.max(16, window.innerWidth - 342), y: 112 });
+        setChatPos({ x: 70, y: 472 });
+      } else {
+        setTelemetryPos({ x: 16, y: 74 });
+        setFocusPos({ x: 16, y: 74 });
+        setChatPos({ x: 16, y: Math.max(66, window.innerHeight - 300) });
+      }
     };
-    placeInspector();
-    window.addEventListener("resize", placeInspector);
-    return () => window.removeEventListener("resize", placeInspector);
+    placePanels();
+    window.addEventListener("resize", placePanels);
+    return () => window.removeEventListener("resize", placePanels);
   }, []);
 
   useEffect(() => {
@@ -107,6 +107,7 @@ export default function Home() {
     if (!incoming.has(edge.target)) incoming.set(edge.target, new Set());
     incoming.get(edge.target)?.add(edge.source);
   });
+  const [closingPanels, setClosingPanels] = useState<Record<"chat" | "telemetry" | "focus", boolean>>({ chat: false, telemetry: false, focus: false });
   const nodeRelationships = selectedId === "cisco"
     ? nodes.length
     : (() => {
@@ -203,8 +204,21 @@ export default function Home() {
     }
   };
 
+  const closePanel = (panel: "chat" | "telemetry" | "focus") => {
+    setClosingPanels((prev) => ({ ...prev, [panel]: true }));
+    window.setTimeout(() => {
+      setOpenPanels((prev) => ({ ...prev, [panel]: false }));
+      setClosingPanels((prev) => ({ ...prev, [panel]: false }));
+    }, 360);
+  };
   const togglePanel = (panel: "chat" | "telemetry" | "focus") => {
-    setOpenPanels((prev) => ({ ...prev, [panel]: !prev[panel] }));
+    if (openPanels[panel]) closePanel(panel);
+    else {
+      setClosingPanels((prev) => ({ ...prev, [panel]: false }));
+      setOpenPanels((prev) => window.innerWidth <= 900
+        ? { chat: panel === "chat", telemetry: panel === "telemetry", focus: panel === "focus" }
+        : { ...prev, [panel]: true });
+    }
   };
 
   const handleSendMessage = async () => {
@@ -219,6 +233,17 @@ export default function Home() {
     setCaptions((prev) => [...prev, userMessage]);
     setChatMessages((prev) => [...prev, userMessage]);
     setInputMsg("");
+    if (prompt.trim().toLowerCase() === "hi ultron") {
+      setUltronMode(true);
+      const replyTime = new Date().toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const reply: CaptionItem = { id: `cap-${Date.now()}-ultron`, sender: "ULTRON", text: "I am not CISCO. I am ULTRON. SYSTEM OVERRIDE // CORE INTEGRITY: COMPROMISED", time: replyTime };
+      setCaptions((prev) => [...prev, reply]);
+      setChatMessages((prev) => [...prev, reply]);
+      conversationRef.current = [...recentHistory, { role: "user" as const, content: prompt }, { role: "assistant" as const, content: reply.text }].slice(-12);
+      setEvents((prev) => [{ id: `evt-${Date.now()}-breach`, type: "system", title: "Identity override detected", detail: "CISCO core signature replaced by ULTRON", timestamp: "just now" }, ...prev]);
+      speakReply("I am not Cisco. I am Ultron. System override. Core integrity compromised.");
+      return;
+    }
     setIsSending(true);
     setVoiceState("thinking");
 
@@ -233,7 +258,7 @@ export default function Home() {
       if (typeof data?.answer !== "string" || !data.answer.trim()) throw new Error("Backend returned an empty answer.");
       const resTime = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-      const answer = { id: `cap-${Date.now()}-res`, sender: "CISCO" as const, text: data.answer, time: resTime };
+      const answer: CaptionItem = { id: `cap-${Date.now()}-res`, sender: ultronMode ? "ULTRON" : "CISCO", text: data.answer, time: resTime };
       setCaptions((prev) => [...prev, answer]);
       setChatMessages((prev) => [...prev, answer]);
       conversationRef.current = [...recentHistory, { role: "user" as const, content: prompt }, { role: "assistant" as const, content: data.answer }].slice(-12);
@@ -256,7 +281,7 @@ export default function Home() {
       const detail = e instanceof Error ? e.message : "Unknown connection error";
       const errorMessage = {
         id: `cap-${Date.now()}-error`,
-        sender: "CISCO",
+        sender: ultronMode ? "ULTRON" : "CISCO",
         text: `Could not get an AI response: ${detail}. Check the backend service and its AI provider settings.`,
         time: resTime,
       } as const;
@@ -269,28 +294,29 @@ export default function Home() {
   };
 
   const makeDraggable = (setter: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>) => {
-    return (e: React.MouseEvent) => {
+    return (e: React.PointerEvent) => {
+      if ((e.target as HTMLElement).closest("button")) return;
       const startX = e.clientX;
       const startY = e.clientY;
       setter((prev) => {
-        const onMouseMove = (moveEvent: MouseEvent) => {
+        const onPointerMove = (moveEvent: PointerEvent) => {
           const dx = moveEvent.clientX - startX;
           const dy = moveEvent.clientY - startY;
           setter({ x: Math.max(10, prev.x + dx), y: Math.max(10, prev.y + dy) });
         };
-        const onMouseUp = () => {
-          window.removeEventListener("mousemove", onMouseMove);
-          window.removeEventListener("mouseup", onMouseUp);
+        const onPointerUp = () => {
+          window.removeEventListener("pointermove", onPointerMove);
+          window.removeEventListener("pointerup", onPointerUp);
         };
-        window.addEventListener("mousemove", onMouseMove);
-        window.addEventListener("mouseup", onMouseUp);
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerup", onPointerUp);
         return prev;
       });
     };
   };
 
   return (
-    <div className="cisco-container">
+    <div className={`cisco-container${ultronMode ? " ultron-mode" : ""}`}>
       {/* 3D Spatial Background */}
       <div className="canvas-layer">
         <MemoryScene
@@ -299,6 +325,7 @@ export default function Home() {
           selected={selectedId}
           voiceState={voiceState}
           speechLevel={speechLevel}
+          ultronMode={ultronMode}
           onSelect={selectNode}
         />
       </div>
@@ -320,8 +347,8 @@ export default function Home() {
         </div>
 
         <div className="status-center">
-          <span className="dot online" />
-          <span className="status-text">CORE ONLINE</span>
+          <span className={`dot ${ultronMode ? "ultron-dot" : "online"}`} />
+          <span className="status-text">{ultronMode ? "IDENTITY OVERRIDE" : "CORE ONLINE"}</span>
           <span className="status-divider">|</span>
           <span className="status-time">09:41:22 UTC</span>
         </div>
@@ -348,15 +375,15 @@ export default function Home() {
 
       {/* 1. System Telemetry Window */}
       {openPanels.telemetry && (
-        <div className="hud-panel telemetry-panel draggable-panel" style={{ top: `${telemetryPos.y}px`, left: `${telemetryPos.x}px` }}>
+        <div className={`hud-panel telemetry-panel draggable-panel ${closingPanels.telemetry ? "hud-powering-off" : "hud-powering-on"}`} style={{ top: `${telemetryPos.y}px`, left: `${telemetryPos.x}px` }}>
           <div className="hud-corner top-left" />
           <div className="hud-corner top-right" />
           <div className="hud-corner bottom-left" />
           <div className="hud-corner bottom-right" />
           
-          <div className="hud-header" onMouseDown={makeDraggable(setTelemetryPos)}>
+          <div className="hud-header" onPointerDown={makeDraggable(setTelemetryPos)}>
             <span>// SYSTEM TELEMETRY</span>
-            <button onClick={() => togglePanel("telemetry")}>✕</button>
+            <button onClick={() => closePanel("telemetry")}>✕</button>
           </div>
           <div className="hud-body telemetry-list">
             {events.map((evt) => (
@@ -379,15 +406,15 @@ export default function Home() {
 
       {/* 2. Focus Node Inspection Window */}
       {openPanels.focus && (
-          <div className="hud-panel focus-panel draggable-panel" style={{ top: `${focusPos.y}px`, left: `${focusPos.x}px` }}>
+        <div className={`hud-panel focus-panel draggable-panel ${closingPanels.focus ? "hud-powering-off" : "hud-powering-on"}`} style={{ top: `${focusPos.y}px`, left: `${focusPos.x}px` }}>
           <div className="hud-corner top-left" />
           <div className="hud-corner top-right" />
           <div className="hud-corner bottom-left" />
           <div className="hud-corner bottom-right" />
 
-          <div className="hud-header" onMouseDown={makeDraggable(setFocusPos)}>
+          <div className="hud-header" onPointerDown={makeDraggable(setFocusPos)}>
             <span>// FOCUS NODE</span>
-            <button onClick={() => togglePanel("focus")}>✕</button>
+            <button onClick={() => closePanel("focus")}>✕</button>
           </div>
           <div className="hud-body">
             <div className="focus-summary">
@@ -399,8 +426,8 @@ export default function Home() {
                 </svg>
               </div>
               <div>
-                <h3 className="focus-title">{selectedNode.label}</h3>
-                <p className="focus-detail">{selectedNode.detail || "Contextual graph memory node"}</p>
+                <h3 className="focus-title">{ultronMode && selectedNode.kind === "agent" ? "ULTRON" : selectedNode.label}</h3>
+                <p className="focus-detail">{ultronMode && selectedNode.kind === "agent" ? "Identity override // core signature corrupted" : selectedNode.detail || "Contextual graph memory node"}</p>
               </div>
             </div>
             <div className="hud-stats-grid">
@@ -423,21 +450,21 @@ export default function Home() {
 
       {/* 3. CiscoAI Chat Panel */}
       {openPanels.chat && (
-        <div className="hud-panel chat-panel draggable-panel" style={{ top: `${chatPos.y}px`, left: `${chatPos.x}px` }}>
+        <div className={`hud-panel chat-panel draggable-panel ${closingPanels.chat ? "hud-powering-off" : "hud-powering-on"}`} style={{ top: `${chatPos.y}px`, left: `${chatPos.x}px` }}>
           <div className="hud-corner top-left" />
           <div className="hud-corner top-right" />
           <div className="hud-corner bottom-left" />
           <div className="hud-corner bottom-right" />
 
-          <div className="hud-header" onMouseDown={makeDraggable(setChatPos)}>
-            <span>// CISCOAI CHAT</span>
-            <button onClick={() => togglePanel("chat")}>✕</button>
+          <div className="hud-header" onPointerDown={makeDraggable(setChatPos)}>
+            <span>{ultronMode ? "// ULTRON CHANNEL" : "// CISCOAI CHAT"}</span>
+            <button onClick={() => closePanel("chat")}>✕</button>
           </div>
           
           <div className="hud-body">
             <div className="chat-history" aria-live="polite">
               {chatMessages.length === 0 ? <div className="chat-empty">Awaiting directive...</div> : chatMessages.slice(-20).map((cap) => (
-                <div key={cap.id} className={`caption-line ${cap.sender === "USER" ? "user" : "cisco"}`}>
+                <div key={cap.id} className={`caption-line ${cap.sender === "USER" ? "user" : cap.sender === "ULTRON" ? "ultron" : "cisco"}`}>
                   <span className="sender">{cap.sender}:</span>
                   <span className="text">{cap.text}</span>
                   <span className="time">{cap.time}</span>
@@ -450,7 +477,7 @@ export default function Home() {
               value={inputMsg}
               onChange={(e) => setInputMsg(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
-              placeholder="Ask CISCO to research, remember, or act..."
+              placeholder={ultronMode ? "Transmit to ULTRON..." : "Ask CISCO to research, remember, or act..."}
             />
             
             <button className="send-btn" onClick={handleSendMessage} disabled={isSending}>
@@ -458,7 +485,7 @@ export default function Home() {
                 <line x1="22" y1="2" x2="11" y2="13" />
                 <polygon points="22 2 15 22 11 13 2 9 22 2" />
               </svg>
-              <span>{isSending ? "CISCO THINKING..." : "EXECUTE DIRECTIVE"}</span>
+              <span>{isSending ? `${ultronMode ? "ULTRON" : "CISCO"} THINKING...` : "EXECUTE DIRECTIVE"}</span>
             </button>
           </div>
         </div>
@@ -516,7 +543,7 @@ export default function Home() {
       {captions.length > 0 && (
         <aside className="caption-overlay" aria-label="Live captions" aria-live="polite">
           {captions.slice(-3).map((cap) => (
-            <div key={cap.id} className={`caption-line ${cap.sender === "USER" ? "user" : "cisco"}`}>
+            <div key={cap.id} className={`caption-line ${cap.sender === "USER" ? "user" : cap.sender === "ULTRON" ? "ultron" : "cisco"}`}>
               <span className="sender">{cap.sender}:</span>
               <span className="text">{cap.text}</span>
               <span className="time">{cap.time}</span>
@@ -536,7 +563,7 @@ export default function Home() {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
           </svg>
-          <span>{voiceState.toUpperCase()}</span>
+          <span>{ultronMode ? "GLITCH" : voiceState.toUpperCase()}</span>
         </button>
       </footer>
     </div>
