@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import "./scene.css";
 
@@ -41,17 +41,17 @@ export default function Home() {
   const [isSending, setIsSending] = useState(false);
   const [activePanel, setActivePanel] = useState<"chat" | "telemetry" | "focus" | null>(null);
 
-  // Draggable Window Positions
-  const [chatPos, setChatPos] = useState({ x: 24, y: 100 });
+  // Draggable Window Coordinates
+  const [chatPos, setChatPos] = useState({ x: 24, y: 120 });
   const [telemetryPos, setTelemetryPos] = useState({ x: 24, y: 120 });
-  const [focusPos, setFocusPos] = useState({ x: 24, y: 100 });
+  const [focusPos, setFocusPos] = useState({ x: 24, y: 120 });
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [graphRes, eventsRes] = await Promise.all([
-          fetch(`${API_URL}/api/graph`).then((r) => r.ok ? r.json() : null),
-          fetch(`${API_URL}/api/events`).then((r) => r.ok ? r.json() : null),
+          fetch(`${API_URL}/api/graph`).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_URL}/api/events`).then((r) => (r.ok ? r.json() : null)),
         ]);
         if (graphRes?.nodes) setNodes(graphRes.nodes);
         if (graphRes?.edges) setEdges(graphRes.edges);
@@ -100,9 +100,9 @@ export default function Home() {
     }
   };
 
-  // Helper for Draggable Windows
+  // Drag Handler for Floating HUD Panels
   const makeDraggable = (setter: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>) => {
-  return (e: React.MouseEvent) => {
+    return (e: React.MouseEvent) => {
       const startX = e.clientX;
       const startY = e.clientY;
       setter((prev) => {
@@ -124,17 +124,14 @@ export default function Home() {
 
   return (
     <div className="cisco-container">
-      {/* 3D Viewport Layer */}
+      {/* Full-Screen 3D Background Canvas Layer */}
       <div className="canvas-layer">
         <MemoryScene
           nodes={nodes}
           edges={edges}
           selected={selectedId}
           voiceState={voiceState}
-          onSelect={(id) => {
-            setSelectedId(id);
-            setActivePanel("focus");
-          }}
+          onSelect={(id) => setSelectedId(id)}
         />
       </div>
 
@@ -142,7 +139,10 @@ export default function Home() {
       <header className="top-bar">
         <div className="brand flex items-center gap-3">
           <div className="logo-box">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3zM6 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3z"/><path d="M18 8H6m12 8H6"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3zM6 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3z" />
+              <path d="M18 8H6m12 8H6" />
+            </svg>
           </div>
           <div>
             <div className="brand-title">CiscoAI</div>
@@ -159,7 +159,10 @@ export default function Home() {
 
         <div className="header-right">
           <div className="icon-badge">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
           </div>
         </div>
       </header>
@@ -172,14 +175,11 @@ export default function Home() {
 
       <div className="orbital-badge">⊙ ORBITAL</div>
 
-      {/* DRAGGABLE & RESIZABLE FLOATING WINDOWS */}
-      
+      {/* TOGGLEABLE & DRAGGABLE FLOATING HUD PANELS */}
+
       {/* 1. Focus Node Panel */}
       {activePanel === "focus" && (
-        <div
-          className="hud-panel draggable-panel"
-          style={{ top: `${focusPos.y}px`, left: `${focusPos.x}px` }}
-        >
+        <div className="hud-panel draggable-panel" style={{ top: `${focusPos.y}px`, left: `${focusPos.x}px` }}>
           <div className="hud-header" onMouseDown={makeDraggable(setFocusPos)}>
             <span>// FOCUS NODE</span>
             <button onClick={() => setActivePanel(null)}>✕</button>
@@ -212,10 +212,7 @@ export default function Home() {
 
       {/* 2. Telemetry Log Panel */}
       {activePanel === "telemetry" && (
-        <div
-          className="hud-panel draggable-panel"
-          style={{ top: `${telemetryPos.y}px`, left: `${telemetryPos.x}px` }}
-        >
+        <div className="hud-panel draggable-panel" style={{ top: `${telemetryPos.y}px`, left: `${telemetryPos.x}px` }}>
           <div className="hud-header" onMouseDown={makeDraggable(setTelemetryPos)}>
             <span>// SYSTEM TELEMETRY</span>
             <button onClick={() => setActivePanel(null)}>✕</button>
@@ -234,10 +231,7 @@ export default function Home() {
 
       {/* 3. Floating Chat Directive Panel */}
       {activePanel === "chat" && (
-        <div
-          className="hud-panel draggable-panel"
-          style={{ top: `${chatPos.y}px`, left: `${chatPos.x}px` }}
-        >
+        <div className="hud-panel draggable-panel" style={{ top: `${chatPos.y}px`, left: `${chatPos.x}px` }}>
           <div className="hud-header" onMouseDown={makeDraggable(setChatPos)}>
             <span>// DIRECTIVE INPUT / CAPTIONS</span>
             <button onClick={() => setActivePanel(null)}>✕</button>
@@ -256,14 +250,16 @@ export default function Home() {
         </div>
       )}
 
-      {/* Right Floating Action Rail (Exact Match to bbce04 Vector SVGs) */}
+      {/* Right Floating Action Rail */}
       <div className="right-dock">
         <button
           title="Focus Node"
           onClick={() => setActivePanel(activePanel === "focus" ? null : "focus")}
           className={activePanel === "focus" ? "active" : ""}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3z"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3z" />
+          </svg>
         </button>
 
         <button
@@ -271,7 +267,11 @@ export default function Home() {
           onClick={toggleMic}
           className={voiceState === "listening" ? "active-mic" : ""}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <line x1="12" y1="19" x2="12" y2="22" />
+          </svg>
         </button>
 
         <button
@@ -279,7 +279,9 @@ export default function Home() {
           onClick={() => setActivePanel(activePanel === "telemetry" ? null : "telemetry")}
           className={activePanel === "telemetry" ? "active" : ""}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+          </svg>
         </button>
 
         <button
@@ -287,7 +289,9 @@ export default function Home() {
           onClick={() => setActivePanel(activePanel === "chat" ? null : "chat")}
           className={activePanel === "chat" ? "active" : ""}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
         </button>
       </div>
 
