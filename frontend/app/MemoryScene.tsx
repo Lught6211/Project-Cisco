@@ -9,18 +9,18 @@ import type { Group, Mesh } from "three";
 type MemoryNode = { id: string; label: string; kind: string; x: number; y: number; detail?: string; active?: boolean };
 type MemoryEdge = { source: string; target: string; label: string };
 
-const nodeTypeColors: Record<string, string> = {
-  agent: "#00f0ff",   // Cyber Cyan
-  person: "#10b981",  // Emerald Green
-  place: "#a855f7",   // Neon Violet
-  task: "#f59e0b",    // Solar Amber
-  memory: "#3b82f6"   // Electric Blue
+const nodeColors: Record<string, string> = {
+  agent: "#52e5da",   // Cyan / Blue
+  person: "#52e5da",  // Cyan
+  place: "#b8a3ff",   // Purple
+  task: "#f2b66d",    // Yellow / Gold
+  memory: "#6e9695"   // Muted Cyan
 };
 
 const stateColors: Record<string, string> = {
-  idle: "#00f0ff",      // Cyan
-  listening: "#f59e0b", // Amber
-  thinking: "#a855f7",  // Purple
+  idle: "#52e5da",      // Cyan
+  listening: "#f2b66d", // Amber
+  thinking: "#b8a3ff",  // Purple
   speaking: "#10b981"   // Green
 };
 
@@ -42,72 +42,65 @@ export default function MemoryScene({
 
   const positions = useMemo(() => new Map(safeNodes.map((node, index) => [
     node.id, 
-    [(node.x - 50) / 7, (50 - node.y) / 7, ((index % 3) - 1) * 1.2] as [number, number, number]
+    [(node.x - 50) / 7.2, (50 - node.y) / 7.2, ((index % 3) - 1) * 0.9] as [number, number, number]
   ])), [safeNodes]);
 
-  const relationshipLevels = useMemo(() => new Map(safeNodes.map((node) => [
-    node.id, 
-    safeEdges.filter((edge) => edge.source === node.id || edge.target === node.id).length
-  ])), [safeNodes, safeEdges]);
-
   const spaceDots = useMemo(() => {
-    const values = new Float32Array(700 * 3);
-    for (let i = 0; i < 700; i++) {
-      values[i * 3] = ((i * 19) % 180 - 90) / 8;
-      values[i * 3 + 1] = ((i * 31) % 140 - 70) / 8;
-      values[i * 3 + 2] = ((i * 47) % 110 - 55) / 8;
+    const values = new Float32Array(800 * 3);
+    for (let i = 0; i < 800; i++) {
+      values[i * 3] = ((i * 17) % 180 - 90) / 8;
+      values[i * 3 + 1] = ((i * 29) % 140 - 70) / 8;
+      values[i * 3 + 2] = ((i * 43) % 120 - 60) / 8;
     }
     return values;
   }, []);
 
   return (
     <Canvas 
-      camera={{ position: [0, 0, 9.5], fov: 42 }} 
-      dpr={[1, 1.5]} 
-      performance={{ min: 0.6 }} 
-      gl={{ antialias: false, powerPreference: "high-performance" }}
+      camera={{ position: [0, 0, 9.2], fov: 42 }} 
+      dpr={[1, 2]} 
+      gl={{ antialias: true, powerPreference: "high-performance" }}
     >
-      <color attach="background" args={["#030712"]} />
-      <ambientLight intensity={2.0} />
-      <pointLight position={[0, 0, 8]} intensity={25} color="#00f0ff" />
-      <pointLight position={[-8, -5, -4]} intensity={15} color="#a855f7" />
+      <color attach="background" args={["#081011"]} />
+      <ambientLight intensity={1.8} />
+      <pointLight position={[0, 0, 10]} intensity={20} color="#52e5da" />
 
+      {/* Deep Space Background Particle Cloud */}
       <points>
         <bufferGeometry><bufferAttribute attach="attributes-position" args={[spaceDots, 3]} /></bufferGeometry>
-        <pointsMaterial size={0.042} color="#00f0ff" transparent opacity={0.5} sizeAttenuation blending={THREE.AdditiveBlending} />
+        <pointsMaterial size={0.032} color="#52e5da" transparent opacity={0.4} sizeAttenuation />
       </points>
 
+      {/* Connecting Laser Beams */}
       {safeEdges.map((edge) => {
         const from = positions.get(edge.source);
         const to = positions.get(edge.target);
-        const level = Math.max(1, Math.min(relationshipLevels.get(edge.source) ?? 1, 4));
-        const edgeColor = level > 2 ? "#00f0ff" : level > 1 ? "#a855f7" : "#1e293b";
         return from && to ? (
           <group key={`${edge.source}-${edge.target}`}>
             <Line
               points={[from, to]}
-              color={edgeColor}
+              color="#52e5da"
               transparent
-              opacity={0.75}
-              lineWidth={level * 1.2}
+              opacity={0.45}
+              lineWidth={1.2}
             />
             <Line
               points={[from, to]}
-              color={edgeColor}
+              color="#b8a3ff"
               transparent
-              opacity={0.25}
-              lineWidth={level * 3.5}
+              opacity={0.2}
+              lineWidth={2.8}
             />
           </group>
         ) : null;
       })}
 
+      {/* Nodes */}
       {safeNodes.map((node) => (
-        <AdvancedNodeVisual
+        <JarvisNodeVisual
           key={node.id}
           node={node}
           position={positions.get(node.id) ?? [0, 0, 0]}
-          level={relationshipLevels.get(node.id) ?? 0}
           active={selected === node.id || node.active === true}
           voiceState={voiceState}
           onSelect={onSelect}
@@ -119,63 +112,56 @@ export default function MemoryScene({
   );
 }
 
-function AdvancedNodeVisual({ node, position, level, active, voiceState, onSelect }: { node: MemoryNode; position: [number, number, number]; level: number; active: boolean; voiceState: "idle" | "listening" | "thinking" | "speaking"; onSelect: (id: string) => void }) {
+function JarvisNodeVisual({ node, position, active, voiceState, onSelect }: { node: MemoryNode; position: [number, number, number]; active: boolean; voiceState: "idle" | "listening" | "thinking" | "speaking"; onSelect: (id: string) => void }) {
   const groupRef = useRef<Group>(null);
   const ring1Ref = useRef<Mesh>(null);
   const ring2Ref = useRef<Mesh>(null);
   
   const isAgent = node.kind === "agent";
-  const baseColor = nodeTypeColors[node.kind] ?? nodeTypeColors.memory;
-  const agentColor = stateColors[voiceState] ?? nodeTypeColors.agent;
-  const color = isAgent ? agentColor : baseColor;
+  const color = isAgent ? stateColors[voiceState] : (nodeColors[node.kind] || "#52e5da");
 
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return;
     const time = clock.getElapsedTime();
 
-    groupRef.current.rotation.y += delta * (isAgent ? 0.35 : 0.12);
-    if (ring1Ref.current) ring1Ref.current.rotation.x += delta * (isAgent ? 0.6 : 0.2);
-    if (ring2Ref.current) ring2Ref.current.rotation.z -= delta * (isAgent ? 0.8 : 0.3);
+    groupRef.current.rotation.y += delta * (isAgent ? 0.3 : 0.1);
+    if (ring1Ref.current) ring1Ref.current.rotation.x += delta * (isAgent ? 0.5 : 0.2);
+    if (ring2Ref.current) ring2Ref.current.rotation.z -= delta * (isAgent ? 0.7 : 0.3);
 
-    const pulseFreq = voiceState === "speaking" ? 14 : voiceState === "listening" ? 9 : voiceState === "thinking" ? 6 : 2;
-    const statePulse = isAgent ? Math.sin(time * pulseFreq) * 0.08 : Math.sin(time * 1.8 + level) * 0.04;
-    
-    groupRef.current.scale.setScalar((active ? 1.25 : 1.0) + statePulse);
+    const pulse = isAgent ? Math.sin(time * (voiceState === "speaking" ? 12 : voiceState === "listening" ? 8 : 2)) * 0.06 : Math.sin(time * 1.5) * 0.03;
+    groupRef.current.scale.setScalar((active ? 1.2 : 1.0) + pulse);
   });
-
-  const knowledgeSize = 0.24 + Math.min(level, 4) * 0.035;
 
   return (
     <group ref={groupRef} position={position} onClick={(e) => { e.stopPropagation(); onSelect(node.id); }}>
+      {/* Central Solid Glowing Sphere */}
       <mesh>
-        <sphereGeometry args={[isAgent ? 0.42 : knowledgeSize, 32, 32]} />
-        <meshBasicMaterial color={color} transparent opacity={active ? 0.95 : 0.85} />
+        <sphereGeometry args={[isAgent ? 0.45 : 0.22, 32, 32]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 2.5 : 1.2} roughness={0.1} />
       </mesh>
 
-      <mesh scale={1.4}>
-        <sphereGeometry args={[isAgent ? 0.45 : knowledgeSize, 24, 24]} />
-        <meshBasicMaterial color={color} transparent opacity={0.25} blending={THREE.AdditiveBlending} />
-      </mesh>
-
+      {/* Outer Wireframe Sphere */}
       <mesh ref={ring1Ref}>
-        {isAgent ? <icosahedronGeometry args={[0.65, 2]} /> : <octahedronGeometry args={[knowledgeSize * 1.5, 1]} />}
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={3.5} wireframe transparent opacity={0.6} />
+        <icosahedronGeometry args={[isAgent ? 0.65 : 0.32, 2]} />
+        <meshBasicMaterial color={color} wireframe transparent opacity={0.45} />
       </mesh>
 
+      {/* Dual Rotating Orbital Rings */}
       <mesh ref={ring2Ref} rotation={[Math.PI / 3, 0, 0]}>
-        <torusGeometry args={[isAgent ? 0.88 : 0.45, 0.015, 16, 64]} />
-        <meshBasicMaterial color={color} transparent opacity={active ? 0.9 : 0.6} blending={THREE.AdditiveBlending} />
+        <torusGeometry args={[isAgent ? 0.82 : 0.42, 0.012, 16, 64]} />
+        <meshBasicMaterial color={color} transparent opacity={active ? 0.9 : 0.5} />
       </mesh>
       <mesh rotation={[0, Math.PI / 4, Math.PI / 3]}>
-        <torusGeometry args={[isAgent ? 1.08 : 0.58, 0.009, 12, 64]} />
-        <meshBasicMaterial color={color} transparent opacity={active ? 0.6 : 0.3} blending={THREE.AdditiveBlending} />
+        <torusGeometry args={[isAgent ? 0.98 : 0.52, 0.008, 12, 64]} />
+        <meshBasicMaterial color={color} transparent opacity={active ? 0.6 : 0.25} />
       </mesh>
 
+      {/* Text Label Billboard */}
       <Billboard follow>
-        <Text position={[isAgent ? 0.98 : 0.62, 0.24, 0]} fontSize={isAgent ? 0.24 : 0.15} color="#ffffff" anchorX="left" anchorY="middle" outlineWidth={0.018} outlineColor="#020617">
+        <Text position={[isAgent ? 0.85 : 0.52, 0.18, 0]} fontSize={isAgent ? 0.22 : 0.13} color="#ffffff" anchorX="left" anchorY="middle" outlineWidth={0.015} outlineColor="#081011">
           {node.label}
         </Text>
-        <Text position={[isAgent ? 0.98 : 0.62, -0.02, 0]} fontSize={0.09} color={color} anchorX="left" anchorY="middle" letterSpacing={0.12}>
+        <Text position={[isAgent ? 0.85 : 0.52, -0.02, 0]} fontSize={0.08} color={color} anchorX="left" anchorY="middle" letterSpacing={0.1}>
           {`// ${node.kind.toUpperCase()}`}
         </Text>
       </Billboard>
@@ -192,7 +178,7 @@ function SceneControls({ selectedPosition }: { selectedPosition?: [number, numbe
   useEffect(() => {
     if (!selectedPosition || !controlsRef.current) return;
     focusTarget.current.set(...selectedPosition);
-    focusPosition.current.set(selectedPosition[0], selectedPosition[1], selectedPosition[2] + 4.2);
+    focusPosition.current.set(selectedPosition[0], selectedPosition[1], selectedPosition[2] + 4.0);
     focusing.current = true;
   }, [selectedPosition]);
 
@@ -202,7 +188,7 @@ function SceneControls({ selectedPosition }: { selectedPosition?: [number, numbe
     controlsRef.current.target.lerp(focusTarget.current, easing);
     controlsRef.current.object.position.lerp(focusPosition.current, easing);
     controlsRef.current.update();
-    if (controlsRef.current.object.position.distanceTo(focusPosition.current) < 0.05) focusing.current = false;
+    if (controlsRef.current.object.position.distanceTo(focusPosition.current) < 0.04) focusing.current = false;
   });
 
   return <OrbitControls ref={controlsRef} enablePan enableZoom zoomToCursor minDistance={2.5} maxDistance={22} enableDamping dampingFactor={0.08} makeDefault />;
