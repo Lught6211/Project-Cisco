@@ -1,134 +1,295 @@
-/* Futuristic Cyber-Grid & Scanline Overlays */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
 body, html {
-  background-color: #030712;
-  color: #f8fafc;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  overflow-x: hidden;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #081011;
+  color: #e9f2f2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-.app-shell {
-  background: 
-    radial-gradient(circle at 50% 50%, rgba(0, 240, 255, 0.03) 0%, transparent 70%),
-    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
-  background-size: 100% 100%, 40px 40px, 40px 40px;
-  min-height: 100vh;
-}
-
-/* Glassmorphism Panel Styling with Tech Borders */
-.panel, .hologram-panel {
-  background: rgba(15, 23, 42, 0.75) !important;
-  backdrop-filter: blur(16px) saturate(180%);
-  border: 1px solid rgba(0, 240, 255, 0.25) !important;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37), inset 0 0 12px rgba(0, 240, 255, 0.05);
-  border-radius: 8px;
-}
-
-.panel-head {
-  border-bottom: 1px solid rgba(0, 240, 255, 0.15);
-  padding: 12px 16px;
-}
-
-.eyebrow {
-  color: #00f0ff !important;
-  font-family: monospace;
-  font-size: 11px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-}
-
-/* Floating HUD Spatial Tooltip Cards in 3D Scene */
-.holo-hud-card {
+.cisco-container {
   position: relative;
-  width: 220px;
-  padding: 12px;
-  background: rgba(3, 7, 18, 0.88);
-  backdrop-filter: blur(12px);
-  border: 1px solid #00f0ff;
-  border-radius: 4px;
-  color: #f8fafc;
-  font-family: monospace;
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.25);
-  pointer-events: none;
-  animation: holoFadeIn 0.2s ease-out;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #081011;
 }
 
-@keyframes holoFadeIn {
-  from { opacity: 0; transform: translateY(6px) scale(0.95); }
-  to { opacity: 1; transform: translateY(0) scale(1.0); }
-}
-
-.holo-corner {
+.canvas-layer {
   position: absolute;
-  width: 6px;
-  height: 6px;
-  border-color: #00f0ff;
-  border-style: solid;
-}
-.holo-corner.top-left { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
-.holo-corner.top-right { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
-.holo-corner.bottom-left { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
-.holo-corner.bottom-right { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
-
-.holo-tag {
-  font-size: 9px;
-  letter-spacing: 1px;
-  margin-bottom: 4px;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
 }
 
-.holo-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #ffffff;
-  margin-bottom: 4px;
-}
-
-.holo-detail {
-  font-size: 10px;
-  color: #94a3b8;
-  line-height: 1.3;
-  margin-bottom: 8px;
-}
-
-.holo-meta {
+/* Top Bar */
+.top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 54px;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  font-size: 9px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.15);
-  padding-top: 6px;
-  color: #cbd5e1;
+  padding: 0 24px;
+  border-bottom: 1px solid rgba(82, 229, 218, 0.15);
+  background: rgba(8, 16, 17, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 10;
 }
 
-/* Floating Function Rail Sidebar Buttons */
-.function-rail {
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(0, 240, 255, 0.3);
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.15);
-  padding: 8px;
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.function-rail button {
-  width: 42px;
-  height: 42px;
-  border-radius: 8px;
-  background: rgba(30, 41, 59, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #00f0ff;
+.logo-box {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(82, 229, 218, 0.4);
+  background: rgba(82, 229, 218, 0.08);
+  color: #52e5da;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.brand-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #e9f2f2;
+}
+
+.brand-sub {
+  font-size: 9px;
+  color: rgba(82, 229, 218, 0.7);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.status-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: rgba(233, 242, 242, 0.8);
+  letter-spacing: 0.08em;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot.online { background: #10b981; box-shadow: 0 0 8px #10b981; }
+.dot.cyan { background: #52e5da; }
+.dot.gray { background: #6e9695; }
+
+.status-divider { color: rgba(255, 255, 255, 0.2); }
+
+.icon-badge {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* Subheader Overlay */
+.subheader-overlay {
+  position: absolute;
+  top: 72px;
+  left: 24px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.eyebrow {
+  font-size: 10px;
+  color: #52e5da;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #e9f2f2;
+}
+
+.orbital-badge {
+  position: absolute;
+  top: 72px;
+  right: 24px;
+  z-index: 10;
+  font-size: 10px;
+  color: rgba(82, 229, 218, 0.8);
+  border: 1px solid rgba(82, 229, 218, 0.3);
+  padding: 4px 10px;
+  border-radius: 3px;
+  background: rgba(8, 16, 17, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+/* Right Dock */
+.right-dock {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px;
+  background: rgba(8, 16, 17, 0.75);
+  border: 1px solid rgba(82, 229, 218, 0.25);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+}
+
+.right-dock button {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #52e5da;
+  font-size: 14px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s ease;
 }
 
-.function-rail button:hover {
-  background: rgba(0, 240, 255, 0.2);
-  border-color: #00f0ff;
-  box-shadow: 0 0 12px #00f0ff;
-  transform: scale(1.08);
+.right-dock button:hover {
+  border-color: #52e5da;
+  background: rgba(82, 229, 218, 0.15);
+  box-shadow: 0 0 10px rgba(82, 229, 218, 0.3);
+}
+
+.right-dock button.active-mic {
+  border-color: #f2b66d;
+  background: rgba(242, 182, 109, 0.2);
+  color: #f2b66d;
+  box-shadow: 0 0 12px rgba(242, 182, 109, 0.4);
+}
+
+/* Bottom Bar */
+.bottom-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 10;
+  background: linear-gradient(to top, rgba(8, 16, 17, 0.95), transparent);
+  pointer-events: none;
+}
+
+.bottom-bar * {
+  pointer-events: auto;
+}
+
+.legend {
+  display: flex;
+  gap: 16px;
+  font-size: 10px;
+  color: rgba(233, 242, 242, 0.7);
+  letter-spacing: 0.08em;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hint {
+  font-size: 10px;
+  color: rgba(233, 242, 242, 0.5);
+  letter-spacing: 0.1em;
+}
+
+.voice-pill {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #52e5da;
+  border: 1px solid rgba(82, 229, 218, 0.3);
+  background: rgba(8, 16, 17, 0.8);
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Floating Chat Panel */
+.floating-chat-panel {
+  position: absolute;
+  bottom: 60px;
+  left: 24px;
+  width: 320px;
+  background: rgba(8, 16, 17, 0.9);
+  border: 1px solid rgba(82, 229, 218, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  z-index: 30;
+  backdrop-filter: blur(12px);
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #52e5da;
+  margin-bottom: 8px;
+}
+
+.panel-header button {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+}
+
+.floating-chat-panel textarea {
+  width: 100%;
+  height: 80px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: #fff;
+  padding: 8px;
+  font-size: 11px;
+  font-family: inherit;
+  resize: none;
+}
+
+.floating-chat-panel .send-btn {
+  margin-top: 6px;
+  width: 100%;
+  padding: 6px;
+  background: rgba(82, 229, 218, 0.15);
+  border: 1px solid rgba(82, 229, 218, 0.4);
+  color: #52e5da;
+  border-radius: 4px;
+  cursor: pointer;
 }
