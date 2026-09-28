@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Billboard, Line, OrbitControls, Stars, Text } from "@react-three/drei";
+import { Billboard, Line, OrbitControls, Text } from "@react-three/drei";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Group, Mesh } from "three";
@@ -69,7 +69,7 @@ export default function MemoryScene({
       <ambientLight intensity={2.0} />
       <pointLight position={[0, 0, 10]} intensity={25} color="#52e5da" />
 
-      <Stars radius={48} depth={32} count={1200} factor={1.8} saturation={0.2} fade speed={0.25} />
+      <gridHelper args={[40, 40, "#294e50", "#122628"]} position={[0, -4, -3]} rotation={[Math.PI / 3, 0, 0]} />
 
       {/* Vector Laser Connection Lines */}
       {safeEdges.map((edge) => {
