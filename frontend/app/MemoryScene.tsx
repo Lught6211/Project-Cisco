@@ -59,6 +59,14 @@ export default function MemoryScene({
     safeEdges.filter((edge) => edge.source === node.id || edge.target === node.id).length
   ])), [safeNodes, safeEdges]);
 
+  const spaceExtent = useMemo(() => {
+    let extent = 1;
+    for (const position of positions.values()) {
+      extent = Math.max(extent, Math.hypot(position[0], position[1], position[2]));
+    }
+    return extent;
+  }, [positions]);
+
   return (
     <Canvas 
       camera={{ position: [0, 0, 9.2], fov: 42 }} 
@@ -69,6 +77,7 @@ export default function MemoryScene({
       <ambientLight intensity={2.0} />
       <pointLight position={[0, 0, 10]} intensity={25} color="#52e5da" />
 
+      <VectorSpaceGrid extent={spaceExtent} />
 
       {/* Vector Laser Connection Lines */}
       {safeEdges.map((edge) => {
@@ -102,6 +111,45 @@ export default function MemoryScene({
 
       <SceneControls selectedId={selected} selectedPosition={positions.get(selected)} />
     </Canvas>
+  );
+}
+
+function VectorSpaceGrid({ extent }: { extent: number }) {
+  const ref = useRef<THREE.LineSegments>(null);
+  const geometry = useMemo(() => {
+    const divisions = 18;
+    const halfSize = 7;
+    const points: number[] = [];
+    const planes: Array<"xy" | "xz" | "yz"> = ["xy", "xz", "yz"];
+    for (const plane of planes) {
+      for (let i = 0; i <= divisions; i++) {
+        const offset = -halfSize + (2 * halfSize * i) / divisions;
+        if (plane === "xy") {
+          points.push(-halfSize, offset, 0, halfSize, offset, 0, offset, -halfSize, 0, offset, halfSize, 0);
+        } else if (plane === "xz") {
+          points.push(-halfSize, 0, offset, halfSize, 0, offset, offset, 0, -halfSize, offset, 0, halfSize);
+        } else {
+          points.push(0, -halfSize, offset, 0, halfSize, offset, 0, offset, -halfSize, 0, offset, halfSize);
+        }
+      }
+    }
+    const result = new THREE.BufferGeometry();
+    result.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
+    return result;
+  }, []);
+
+  useFrame(({ clock }, delta) => {
+    if (!ref.current) return;
+    const time = clock.getElapsedTime();
+    const target = 0.72 + Math.min(extent / 8, 0.95) + Math.sin(time * 2) * 0.04;
+    const scale = THREE.MathUtils.damp(ref.current.scale.x, target, 1.8, delta);
+    ref.current.scale.setScalar(scale);
+  });
+
+  return (
+    <lineSegments ref={ref} geometry={geometry} renderOrder={0}>
+      <lineBasicMaterial color="#368d91" transparent opacity={0.19} depthWrite={false} />
+    </lineSegments>
   );
 }
 

@@ -69,9 +69,9 @@ If Ollama is unavailable, CISCO displays a provider connection error in the chat
 
 ### Research, memory, and browser speech
 
-Use the dashboard directive box to ask a question. The app gathers free Wikipedia/DuckDuckGo context for the request, sends it to the configured model, stores the topic and up to three sources in the memory graph, and returns the answer. The microphone control currently changes the listening indicator; speech recognition is not connected to the backend chat flow.
+Use the dashboard directive box to ask a question. The app gathers free Wikipedia/DuckDuckGo context for the request, sends it to the configured model, stores the topic and up to three sources in the memory graph, and returns the answer. Replies are spoken with the browser's built-in speech synthesis and CISCO's core turns green while speaking. The microphone control currently changes the listening indicator; speech recognition is not connected to the backend chat flow.
 
-The dashboard is responsive and installable as a CiscoAI PWA on desktop and mobile browsers. The memory graph is a Three.js scene with JARVIS-style spatial nodes connected by 3D relationship vectors; it has no background grid plane or star field. Drag to orbit around nodes, pinch or scroll to zoom, and tap a node to focus it. A native packaged mobile app can be added later with the same API, but the current PWA requires no app-store account.
+The dashboard is responsive and installable as a CiscoAI PWA on desktop and mobile browsers. The memory graph is a Three.js scene with JARVIS-style spatial nodes connected by 3D relationship vectors. Its spatial reference grid is formed from three intersecting vector planes, expands to fit the graph, and has no star field. Drag to orbit around nodes, pinch or scroll to zoom, and tap a node to focus it. A native packaged mobile app can be added later with the same API, but the current PWA requires no app-store account.
 
 The desktop dashboard is a full-viewport 3D graph surface. Telemetry, focus, and chat panels are closed at startup; use the circular controls on the right edge to open them. Each panel can be dragged, resized, and closed. Chat shows the conversation, while live captions appear separately at the bottom-left on a transparent background. Cisco's core changes color by state: blue while idle, yellow while listening, purple while thinking, and green while speaking. Node names billboard toward the camera at every angle, while relationship depth changes node geometry, edge color, line weight, and dash pattern.
 
@@ -79,7 +79,7 @@ The production build is warning-free after declaring Autoprefixer explicitly in 
 
 The graph renderer uses adaptive pixel density, high-performance WebGL, and reduced antialiasing to keep the animated scene responsive on mobile and lower-end machines. The focus button opens the current-view inspector without changing the selected node.
 
-The voice control currently changes the listening state; browser speech recognition and spoken replies are not wired into this dashboard flow yet.
+The microphone control currently changes the listening state only; browser speech recognition is not wired into the dashboard flow. CISCO reads successful chat replies aloud through browser speech synthesis.
 
 To install it, run the frontend, open `http://localhost:3000`, then use the browser menu: Chrome/Edge on Windows choose `Install CiscoAI`; Chrome on Android choose `Add to Home screen` or `Install app`. For local agent responses, keep the backend running. On the hosted deployment, the Render backend serves agent responses and memory updates.
 
@@ -95,7 +95,7 @@ This opens separate backend and frontend terminals and keeps both services runni
 
 The launcher opens the backend and frontend in separate PowerShell windows. The CiscoAI interface starts with its telemetry, focus, and chat panels closed; use the right-edge controls to open them.
 
-For Vercel and Render, set `NEXT_PUBLIC_API_URL` in Vercel to the Render backend URL. Set `GEMINI_API_KEY` in Render's backend environment to enable hosted Gemini replies. Keep the key in Render's environment settings; do not put it in frontend code or commit it. `GEMINI_MODEL` defaults to `gemini-2.5-flash`. If no AI provider is configured, CISCO displays a setup message instead of pretending to generate a model answer.
+For Vercel and Render, set `NEXT_PUBLIC_API_URL` in Vercel to the Render backend URL. In Render, open the `cisco-backend` service's **Environment** page, add `GEMINI_API_KEY` with the key from Google AI Studio, save the change, and let Render redeploy. Keep the key in Render's environment settings; do not put it in frontend code or commit it. `GEMINI_MODEL` defaults to `gemini-2.5-flash`. AI errors now include the provider's HTTP status and a targeted hint for invalid credentials, missing models, and quota limits. If no provider is configured, CISCO displays a setup message instead of pretending to generate a model answer.
 
 The development CORS policy allows local-network browser access without credentials. Do not expose this development server directly to the public internet; production deployment should use HTTPS, authentication, and a restricted origin list.
 

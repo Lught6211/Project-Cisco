@@ -91,4 +91,35 @@ class AgentRuntime:
     @staticmethod
     def _provider_error(provider: str, exc: Exception) -> str:
         logger.error("%s request failed: %s", provider, exc)
-        return f"CISCO couldn't reach the {provider} AI service. Check the backend API key and provider settings, then try again."
+        if isinstance(exc, error.HTTPError):
+            detail = ""
+            try:
+                payload = json.loads(exc.read().decode("utf-8"))
+                detail = payload.get("error", {}).get("message", "")
+            except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+                pass
+
+            status = exc.code
+            if provider.lower() == "gemini":
+                if status in (401, 403):
+                    hint = "Verify GEMINI_API_KEY in Render and confirm it is allowed to use this model."
+                elif status == 404:
+                    hint = "Check GEMINI_MODEL; the configured model was not found."
+                elif status == 429:
+                    hint = "The Gemini quota or rate limit was reached; check Google AI Studio usage and retry later."
+                else:
+                    hint = "Check the Gemini provider settings and try again."
+            elif status in (401, 403):
+                hint = "Verify the API key configured for this provider."
+            elif status == 404:
+                hint = "Check the configured provider endpoint and model name."
+            elif status == 429:
+                hint = "The provider quota or rate limit was reached; retry later."
+            else:
+                hint = "Check the provider settings and try again."
+            explanation = f" {detail[:240]}" if detail else ""
+            return f"CISCO's {provider} request was rejected (HTTP {status}).{explanation} {hint}"
+
+        if isinstance(exc, (TimeoutError, error.URLError, OSError)):
+            return f"CISCO couldn't connect to the {provider} service. The backend may be offline, waking from sleep, or unable to reach the network. Try again shortly."
+        return f"CISCO's {provider} request failed: {str(exc)[:240]}. Check the backend logs and provider settings."

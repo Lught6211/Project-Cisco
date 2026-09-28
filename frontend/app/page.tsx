@@ -90,6 +90,20 @@ export default function Home() {
     setVoiceState((prev) => (prev === "idle" ? "listening" : "idle"));
   };
 
+  const speakReply = (text: string) => {
+    if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+      setVoiceState("idle");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = navigator.language || "en-US";
+    utterance.onend = () => setVoiceState("idle");
+    utterance.onerror = () => setVoiceState("idle");
+    setVoiceState("speaking");
+    window.speechSynthesis.speak(utterance);
+  };
+
   const togglePanel = (panel: "chat" | "telemetry" | "focus") => {
     setOpenPanels((prev) => ({ ...prev, [panel]: !prev[panel] }));
   };
@@ -121,6 +135,7 @@ export default function Home() {
       const answer = { id: `cap-${Date.now()}-res`, sender: "CISCO" as const, text: data.answer, time: resTime };
       setCaptions((prev) => [...prev, answer]);
       setChatMessages((prev) => [...prev, answer]);
+      speakReply(data.answer);
       setEvents((prev) => [
         { id: `evt-${Date.now()}`, type: "memory", title: "Directive Executed", detail: data.answer, timestamp: "just now" },
         ...prev,
@@ -136,9 +151,9 @@ export default function Home() {
       } as const;
       setCaptions((prev) => [...prev, errorMessage]);
       setChatMessages((prev) => [...prev, errorMessage]);
+      setVoiceState("idle");
     } finally {
       setIsSending(false);
-      setVoiceState("idle");
     }
   };
 
