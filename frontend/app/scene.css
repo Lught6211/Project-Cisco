@@ -154,6 +154,10 @@ body, html {
   backdrop-filter: blur(6px);
 }
 
+.memory-search-trigger { position:absolute; top:70px; right:108px; z-index:11; display:flex; align-items:center; gap:7px; padding:5px 9px; border:1px solid rgba(82,229,218,.38); border-radius:3px; color:#74ded6; background:rgba(7,20,22,.78); font:700 9px/1 monospace; letter-spacing:.09em; cursor:pointer; backdrop-filter:blur(6px); box-shadow:0 0 12px rgba(82,229,218,.07); transition:background .18s ease,border-color .18s ease,box-shadow .18s ease; }
+.memory-search-trigger:hover { border-color:rgba(82,229,218,.8); background:rgba(24,71,70,.72); box-shadow:0 0 18px rgba(82,229,218,.2); }
+.memory-search-trigger kbd { padding:3px 4px; border:1px solid rgba(116,222,214,.24); border-radius:2px; color:#8aa9a7; font:8px monospace; }
+
 /* SCI-FI BRACKETED FLOATING HUD PANELS */
 .hud-panel {
   position: absolute;
@@ -626,6 +630,7 @@ body, html {
   .telemetry-panel, .chat-panel { width: min(440px, calc(100vw - 32px)); }
   .focus-panel { width: min(310px, calc(100vw - 32px)); }
   .subheader-overlay { left: 16px; top: 68px; }
+  .memory-search-trigger { top:70px; right:104px; }
   .kaizen-scan { top:70px; right:10px; width:min(280px,calc(100vw - 20px)); }
   .navigator-footer { flex-wrap:wrap; justify-content:center; }
 }
@@ -643,6 +648,8 @@ body, html {
   .eyebrow { font-size: 8px; }
   .section-title { font-size: 15px; }
   .orbital-badge { top: 58px; right: 10px; font-size: 8px; }
+  .memory-search-trigger { top:58px; right:72px; gap:4px; padding:5px 6px; font-size:8px; }
+  .memory-search-trigger kbd { display:none; }
   .telemetry-panel { height: 220px; }
   .focus-panel { height: 200px; }
   .chat-panel { height: 240px; }

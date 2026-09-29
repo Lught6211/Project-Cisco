@@ -1,7 +1,7 @@
 "use client";
 
-import { Canvas, useFrame } from "@react-three/fiber";
-import { Billboard, Html, Line, OrbitControls, Text } from "@react-three/drei";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Billboard, Html, Line, OrbitControls, PerformanceMonitor, Text, usePerformanceMonitor } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 import * as THREE from "three";
@@ -77,6 +77,9 @@ export default function MemoryScene({
     if (root) {
       depthByNode.set(root, 0);
       const queue = [root];
+      let queueIndex = 0;
+      const orphans = [...safeNodes].sort((a, b) => compareNodes(a.id, b.id));
+      let orphanIndex = 0;
       const discover = (parent: string, child: string) => {
         if (depthByNode.has(child)) return;
         parentByNode.set(child, parent);
@@ -86,13 +89,14 @@ export default function MemoryScene({
         children.set(parent, siblings);
         queue.push(child);
       };
-      while (queue.length || safeNodes.some((node) => !depthByNode.has(node.id))) {
-        while (queue.length) {
-          const parent = queue.shift()!;
+      while (true) {
+        while (queueIndex < queue.length) {
+          const parent = queue[queueIndex++];
           [...(adjacency.get(parent) ?? [])].sort(compareNodes).forEach((child) => discover(parent, child));
         }
-        const orphan = safeNodes.filter((node) => !depthByNode.has(node.id)).sort((a, b) => compareNodes(a.id, b.id))[0];
-        if (orphan) discover(root, orphan.id);
+        while (orphanIndex < orphans.length && depthByNode.has(orphans[orphanIndex].id)) orphanIndex++;
+        if (orphanIndex >= orphans.length) break;
+        discover(root, orphans[orphanIndex++].id);
       }
     }
 
@@ -164,10 +168,14 @@ export default function MemoryScene({
     }
   }, [safeNodes, positions, parentByNode]);
 
-  const relationshipLevels = useMemo(() => new Map(safeNodes.map((node) => [
-    node.id, 
-    safeEdges.filter((edge) => edge.source === node.id || edge.target === node.id).length
-  ])), [safeNodes, safeEdges]);
+  const relationshipLevels = useMemo(() => {
+    const counts = new Map(safeNodes.map((node) => [node.id, 0]));
+    for (const edge of safeEdges) {
+      if (counts.has(edge.source)) counts.set(edge.source, counts.get(edge.source)! + 1);
+      if (counts.has(edge.target)) counts.set(edge.target, counts.get(edge.target)! + 1);
+    }
+    return counts;
+  }, [safeNodes, safeEdges]);
 
   const spaceExtent = useMemo(() => {
     let extent = 1;
@@ -180,9 +188,12 @@ export default function MemoryScene({
   return (
     <Canvas 
       camera={{ position: [0, 0, Math.max(9.2, spaceExtent * 2.15)], fov: 42 }}
-      dpr={[1, 2]} 
-      gl={{ antialias: true, powerPreference: "high-performance" }}
+      dpr={[0.85, 1.2]}
+      gl={{ antialias: false, alpha: false, powerPreference: "high-performance" }}
     >
+      <PerformanceMonitor factor={0.8} step={0.1} iterations={3} ms={400} threshold={0.67} bounds={() => [52, 58]} flipflops={6}>
+        <AdaptiveResolution />
+      </PerformanceMonitor>
       <color attach="background" args={["#081011"]} />
       <ambientLight intensity={2.0} />
       <pointLight position={[0, 0, 10]} intensity={25} color="#52e5da" />
@@ -227,6 +238,14 @@ export default function MemoryScene({
       <SceneControls selectedId={selected} selectedPosition={positions.get(selected)} orbitRef={orbitRef} />
     </Canvas>
   );
+}
+
+function AdaptiveResolution() {
+  const setDpr = useThree((state) => state.setDpr);
+  usePerformanceMonitor({
+    onChange: ({ factor }) => setDpr(0.84 + factor * 0.36),
+  });
+  return null;
 }
 
 function OrbitalDrift({ children, orbitRef }: { children: ReactNode; orbitRef: RefObject<Group | null> }) {

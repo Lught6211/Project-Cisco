@@ -41,7 +41,7 @@ export default function Home() {
 
   const [captions, setCaptions] = useState<CaptionItem[]>([]);
   const [chatMessages, setChatMessages] = useState<CaptionItem[]>([]);
-  const conversationRef = useRef<ConversationTurn[]>([]);
+  const conversationsByTopicRef = useRef(new Map<string, ConversationTurn[]>());
   const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
   const voiceChoiceLockedRef = useRef(false);
 
@@ -216,8 +216,8 @@ export default function Home() {
       }
       if (event.key === "Escape" && navigatorOpen) setNavigatorOpen(false);
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [navigatorOpen]);
 
   useEffect(() => {
@@ -346,7 +346,8 @@ export default function Home() {
     if (!inputMsg.trim() || isSending) return;
     const prompt = inputMsg;
     const focusedId = selectedNode?.id ?? "cisco";
-    const recentHistory = conversationRef.current.slice(-12);
+    const historyKey = `${ultronMode ? "ultron" : "cisco"}:${focusedId}`;
+    const recentHistory = (conversationsByTopicRef.current.get(historyKey) || []).slice(-12);
     const nowTime = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     // Append User Caption
@@ -364,7 +365,7 @@ export default function Home() {
       const reply: CaptionItem = { id: `cap-${Date.now()}-kaizen`, sender: "CISCO", text: report, time: replyTime };
       setCaptions((prev) => [...prev, reply]);
       setChatMessages((prev) => [...prev, reply]);
-      conversationRef.current = [...recentHistory, { role: "user", content: prompt }, { role: "assistant", content: report }].slice(-12);
+      conversationsByTopicRef.current.set(historyKey, [...recentHistory, { role: "user", content: prompt }, { role: "assistant", content: report }].slice(-12));
       setKaizenScan({ nodes: nodes.length, links: edges.length, isolated, types });
       setEvents((prev) => [{ id: `evt-${Date.now()}-kaizen`, type: "system", title: "Kaizen graph sweep", detail: `${isolated} isolated memories found across ${types} node types`, timestamp: "just now" }, ...prev]);
       speakReply(report);
@@ -376,7 +377,7 @@ export default function Home() {
       const reply: CaptionItem = { id: `cap-${Date.now()}-cisco`, sender: "CISCO", text: "CISCO core restored. I am back online. How can I help?", time: replyTime };
       setCaptions((prev) => [...prev, reply]);
       setChatMessages((prev) => [...prev, reply]);
-      conversationRef.current = [{ role: "user", content: prompt }, { role: "assistant", content: reply.text }];
+      conversationsByTopicRef.current.set(`cisco:${focusedId}`, [{ role: "user", content: prompt }, { role: "assistant", content: reply.text }]);
       setEvents((prev) => [{ id: `evt-${Date.now()}-restore`, type: "system", title: "CISCO core restored", detail: "ULTRON identity override cleared", timestamp: "just now" }, ...prev]);
       speakReply("CISCO core restored. I am back online. How can I help?");
       return;
@@ -387,7 +388,7 @@ export default function Home() {
       const reply: CaptionItem = { id: `cap-${Date.now()}-ultron`, sender: "ULTRON", text: "I am not CISCO. I am ULTRON. SYSTEM OVERRIDE // CORE INTEGRITY: COMPROMISED", time: replyTime };
       setCaptions((prev) => [...prev, reply]);
       setChatMessages((prev) => [...prev, reply]);
-      conversationRef.current = [...recentHistory, { role: "user" as const, content: prompt }, { role: "assistant" as const, content: reply.text }].slice(-12);
+      conversationsByTopicRef.current.set(`ultron:${focusedId}`, [...recentHistory, { role: "user" as const, content: prompt }, { role: "assistant" as const, content: reply.text }].slice(-12));
       setEvents((prev) => [{ id: `evt-${Date.now()}-breach`, type: "system", title: "Identity override detected", detail: "CISCO core signature replaced by ULTRON", timestamp: "just now" }, ...prev]);
       speakReply("I am not Cisco. I am Ultron. System override. Core integrity compromised.");
       return;
@@ -409,10 +410,12 @@ export default function Home() {
       const answer: CaptionItem = { id: `cap-${Date.now()}-res`, sender: ultronMode ? "ULTRON" : "CISCO", text: data.answer, time: resTime };
       setCaptions((prev) => [...prev, answer]);
       setChatMessages((prev) => [...prev, answer]);
-      conversationRef.current = [...recentHistory, { role: "user" as const, content: prompt }, { role: "assistant" as const, content: data.answer }].slice(-12);
+      const updatedHistory = [...recentHistory, { role: "user" as const, content: prompt }, { role: "assistant" as const, content: data.answer }].slice(-12);
+      conversationsByTopicRef.current.set(historyKey, updatedHistory);
       speakReply(data.answer);
       if (typeof data.memory_node_id === "string") {
         setSelectedId(data.memory_node_id);
+        conversationsByTopicRef.current.set(`${ultronMode ? "ultron" : "cisco"}:${data.memory_node_id}`, updatedHistory);
         void fetch(`${API_URL}/api/graph`).then(async (graphRes) => {
           if (!graphRes.ok) return;
           const graph = await graphRes.json();
@@ -523,6 +526,10 @@ export default function Home() {
       </div>
 
       <div className="orbital-badge">⊙ ORBITAL</div>
+      <button className="memory-search-trigger" onClick={() => setNavigatorOpen(true)} aria-label="Search and focus a memory topic">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="10.8" cy="10.8" r="6.8" /><line x1="16" y1="16" x2="21" y2="21" /></svg>
+        <span>FIND TOPIC</span><kbd>CTRL K</kbd>
+      </button>
 
       {/* MULTIPLE SIMULTANEOUS FLOATING HUD WINDOWS */}
 
