@@ -50,6 +50,11 @@ export default function Home() {
   const [speechLevel, setSpeechLevel] = useState(0);
   const [inputMsg, setInputMsg] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [navigatorOpen, setNavigatorOpen] = useState(false);
+  const [navigatorQuery, setNavigatorQuery] = useState("");
+  const [navigatorIndex, setNavigatorIndex] = useState(0);
+  const navigatorInputRef = useRef<HTMLInputElement>(null);
+  const [kaizenScan, setKaizenScan] = useState<{ nodes: number; links: number; isolated: number; types: number } | null>(null);
   const [ultronMode, setUltronMode] = useState(false);
   const [corruption, setCorruption] = useState(0);
   const corruptionRef = useRef(0);
@@ -161,6 +166,9 @@ export default function Home() {
   }, []);
 
   const selectedNode = nodes.find((n) => n.id === selectedId) || nodes[0];
+  const navigatorResults = nodes
+    .filter((node) => `${node.label} ${node.kind} ${node.detail || ""}`.toLowerCase().includes(navigatorQuery.trim().toLowerCase()))
+    .slice(0, 8);
   const outgoing = new Map<string, string[]>();
   const incoming = new Map<string, Set<string>>();
   const nodeKinds = new Map(nodes.map((node) => [node.id, node.kind]));
@@ -187,6 +195,57 @@ export default function Home() {
   const selectNode = (id: string) => {
     setSelectedId(id);
   };
+
+  useEffect(() => {
+    if (!navigatorOpen) return;
+    navigatorInputRef.current?.focus();
+  }, [navigatorOpen]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const editing = target?.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setNavigatorOpen((open) => !open);
+        return;
+      }
+      if (event.key === "/" && !editing && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        setNavigatorOpen(true);
+      }
+      if (event.key === "Escape" && navigatorOpen) setNavigatorOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [navigatorOpen]);
+
+  useEffect(() => {
+    if (!navigatorOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        if (navigatorResults.length) setNavigatorIndex((index) => Math.min(index + 1, navigatorResults.length - 1));
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setNavigatorIndex((index) => Math.max(index - 1, 0));
+      } else if (event.key === "Enter" && navigatorResults[navigatorIndex]) {
+        event.preventDefault();
+        setSelectedId(navigatorResults[navigatorIndex].id);
+        setNavigatorOpen(false);
+        setNavigatorQuery("");
+        setNavigatorIndex(0);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [navigatorOpen, navigatorResults, navigatorIndex]);
+
+  useEffect(() => {
+    if (!kaizenScan) return;
+    const timer = window.setTimeout(() => setKaizenScan(null), 6500);
+    return () => window.clearTimeout(timer);
+  }, [kaizenScan]);
 
   const toggleMic = () => {
     setVoiceState((prev) => (prev === "idle" ? "listening" : "idle"));
@@ -296,6 +355,21 @@ export default function Home() {
     setChatMessages((prev) => [...prev, userMessage]);
     setInputMsg("");
     const greeting = prompt.trim().toLowerCase();
+    if (!ultronMode && greeting === "kaizen") {
+      const linkedIds = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
+      const isolated = nodes.filter((node) => node.kind !== "agent" && !linkedIds.has(node.id)).length;
+      const types = new Set(nodes.map((node) => node.kind)).size;
+      const report = `Kaizen sweep complete: ${nodes.length} nodes, ${edges.length} links, ${isolated} isolated memories, across ${types} node types. Use Ctrl+K or / to find and focus any topic.`;
+      const replyTime = new Date().toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const reply: CaptionItem = { id: `cap-${Date.now()}-kaizen`, sender: "CISCO", text: report, time: replyTime };
+      setCaptions((prev) => [...prev, reply]);
+      setChatMessages((prev) => [...prev, reply]);
+      conversationRef.current = [...recentHistory, { role: "user", content: prompt }, { role: "assistant", content: report }].slice(-12);
+      setKaizenScan({ nodes: nodes.length, links: edges.length, isolated, types });
+      setEvents((prev) => [{ id: `evt-${Date.now()}-kaizen`, type: "system", title: "Kaizen graph sweep", detail: `${isolated} isolated memories found across ${types} node types`, timestamp: "just now" }, ...prev]);
+      speakReply(report);
+      return;
+    }
     if (ultronMode && greeting === "hi cisco") {
       setUltronMode(false);
       const replyTime = new Date().toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -536,7 +610,7 @@ export default function Home() {
           <div className="hud-corner bottom-right" />
 
           <div className="hud-header" onPointerDown={makeDraggable(setChatPos)}>
-            <span>{ultronMode ? "// ULTRON CHANNEL" : "// CISCOAI CHAT"}</span>
+            <span>{ultronMode ? "// ULTRON CHANNEL" : selectedNode.kind === "agent" ? "// CISCOAI CHAT" : `// CHAT / ${selectedNode.label.toUpperCase()}`}</span>
             <button onClick={() => closePanel("chat")}>✕</button>
           </div>
           
@@ -556,7 +630,7 @@ export default function Home() {
               value={inputMsg}
               onChange={(e) => setInputMsg(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
-              placeholder={ultronMode ? "Transmit to ULTRON..." : "Ask CISCO to research, remember, or act..."}
+              placeholder={ultronMode ? "Transmit to ULTRON..." : selectedNode.kind === "agent" ? "Ask CISCO to research, remember, or act..." : `Continue topic: ${selectedNode.label}...`}
             />
             
             <button className="send-btn" onClick={handleSendMessage} disabled={isSending}>
@@ -572,6 +646,17 @@ export default function Home() {
 
       {/* Right Cyber Floating Action Rail */}
       <div className="right-dock">
+        <button
+          title="Find a memory or topic (Ctrl+K or /)"
+          aria-label="Find a memory or topic"
+          onClick={() => setNavigatorOpen(true)}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="10.8" cy="10.8" r="6.8" />
+            <line x1="16" y1="16" x2="21" y2="21" />
+            <path d="M8 11h5m-2.5-2.5v5" />
+          </svg>
+        </button>
         <button
           title="Focus Node"
           onClick={() => togglePanel("focus")}
@@ -618,6 +703,52 @@ export default function Home() {
           </svg>
         </button>
       </div>
+
+      {navigatorOpen && (
+        <div className="navigator-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) setNavigatorOpen(false); }}>
+          <section className="memory-navigator" role="dialog" aria-modal="true" aria-label="Find a memory or topic">
+            <div className="navigator-heading"><span>MEMORY NAVIGATION</span><kbd>ESC</kbd></div>
+            <input
+              ref={navigatorInputRef}
+              value={navigatorQuery}
+              onChange={(event) => { setNavigatorQuery(event.target.value); setNavigatorIndex(0); }}
+              onKeyDown={(event) => { if (["ArrowDown", "ArrowUp", "Enter"].includes(event.key)) event.preventDefault(); }}
+              placeholder="Search names, topics, or details..."
+              aria-label="Search graph memories"
+            />
+            <div className="navigator-results" role="listbox" aria-label="Matching memories">
+              {navigatorResults.length ? navigatorResults.map((node, index) => (
+                <button
+                  key={node.id}
+                  role="option"
+                  aria-selected={navigatorIndex === index}
+                  className={`navigator-result${navigatorIndex === index ? " selected" : ""}`}
+                  onMouseEnter={() => setNavigatorIndex(index)}
+                  onClick={() => { setSelectedId(node.id); setNavigatorOpen(false); setNavigatorQuery(""); setNavigatorIndex(0); }}
+                >
+                  <span className={`navigator-kind kind-${node.kind}`}>{node.kind}</span>
+                  <span className="navigator-node-copy"><strong>{node.label}</strong><small>{node.detail || "Memory node"}</small></span>
+                  <span className="navigator-enter">↵</span>
+                </button>
+              )) : <div className="navigator-empty">No matching nodes in this graph.</div>}
+            </div>
+            <div className="navigator-footer"><span>↑ ↓ SELECT</span><span>ENTER FOCUS TOPIC</span><span>Ctrl K TO TOGGLE</span></div>
+          </section>
+        </div>
+      )}
+
+      {kaizenScan && (
+        <aside className="kaizen-scan" role="status" aria-live="polite">
+          <div className="kaizen-sweep-line" />
+          <div className="kaizen-title"><span className="kaizen-orbit">✳</span><span>KAIZEN // GRAPH HEALTH</span></div>
+          <div className="kaizen-metrics">
+            <div><strong>{kaizenScan.nodes}</strong><span>MEMORIES</span></div>
+            <div><strong>{kaizenScan.links}</strong><span>LINKS</span></div>
+            <div className={kaizenScan.isolated ? "metric-attention" : ""}><strong>{kaizenScan.isolated}</strong><span>ISOLATED</span></div>
+          </div>
+          <div className="kaizen-footnote">{kaizenScan.types} node classes scanned · local graph only</div>
+        </aside>
+      )}
 
       {captions.length > 0 && (
         <aside className="caption-overlay" aria-label="Live captions" aria-live="polite">
