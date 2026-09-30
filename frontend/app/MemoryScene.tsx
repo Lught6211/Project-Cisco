@@ -42,6 +42,7 @@ export default function MemoryScene({
   voiceState,
   speechLevel,
   corruption = 0,
+  hologramMode = false,
   onSelect
 }: {
   nodes?: MemoryNode[];
@@ -50,6 +51,7 @@ export default function MemoryScene({
   voiceState: "idle" | "listening" | "thinking" | "speaking";
   speechLevel: number;
   corruption?: number;
+  hologramMode?: boolean;
   onSelect: (id: string) => void;
 }) {
   const safeNodes = Array.isArray(nodes) ? nodes : [];
@@ -206,14 +208,15 @@ export default function MemoryScene({
           const from = positions.get(edge.source);
           const to = positions.get(edge.target);
           const parentLink = parentByNode.get(edge.source) === edge.target || parentByNode.get(edge.target) === edge.source;
+          const selectedLink = edge.source === selected || edge.target === selected;
           return from && to ? (
             <Line
               key={`${edge.source}-${edge.target}`}
               points={[from, to]}
               color={new THREE.Color(parentLink ? "#52e5da" : "#368d91").lerp(new THREE.Color("#ff263f"), corruption * 0.88)}
               transparent
-              opacity={parentLink ? 0.42 : 0.09}
-              lineWidth={parentLink ? 1.2 : 0.6}
+              opacity={hologramMode ? 0 : selectedLink ? 0.74 : parentLink ? 0.34 : 0.055}
+              lineWidth={selectedLink ? 1.8 : parentLink ? 1.1 : 0.55}
             />
           ) : null;
         })}
@@ -230,12 +233,13 @@ export default function MemoryScene({
             voiceState={voiceState}
             speechLevel={speechLevel}
             corruption={corruption}
+            hologramMode={hologramMode}
             onSelect={onSelect}
           />
         ))}
       </OrbitalDrift>
 
-      <SceneControls selectedId={selected} selectedPosition={positions.get(selected)} orbitRef={orbitRef} />
+      <SceneControls selectedId={selected} selectedPosition={positions.get(selected)} orbitRef={orbitRef} spaceExtent={spaceExtent} hologramMode={hologramMode} />
     </Canvas>
   );
 }
@@ -365,6 +369,7 @@ function JarvisNodeVisual({
   voiceState, 
   speechLevel,
   corruption,
+  hologramMode,
   onSelect 
 }: { 
   node: MemoryNode; 
@@ -376,6 +381,7 @@ function JarvisNodeVisual({
   voiceState: "idle" | "listening" | "thinking" | "speaking"; 
   speechLevel: number;
   corruption: number;
+  hologramMode: boolean;
   onSelect: (id: string) => void 
 }) {
   const groupRef = useRef<Group>(null);
@@ -386,6 +392,7 @@ function JarvisNodeVisual({
   const electronOrbitBRef = useRef<Group>(null);
   const discoveryPulseRef = useRef<Mesh>(null);
   const spawnProgress = useRef<number | null>(null);
+  const presentationProgress = useRef(0);
   const spawnOrbRef = useRef<Group>(null);
   const [hovered, setHovered] = useState(false);
   const nodeSeed = useMemo(() => {
@@ -393,6 +400,7 @@ function JarvisNodeVisual({
     for (const character of node.id) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
     return (hash >>> 0) / 4294967295;
   }, [node.id]);
+  const corePresentationX = useMemo(() => typeof window !== "undefined" && window.innerWidth < 600 ? -1.25 : -3.25, []);
 
   useEffect(() => {
     if (spawnFrom) spawnProgress.current = 0;
@@ -408,6 +416,11 @@ function JarvisNodeVisual({
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return;
     const time = clock.getElapsedTime();
+    presentationProgress.current = THREE.MathUtils.damp(presentationProgress.current, hologramMode ? 1 : 0, 4.2, delta);
+    const parked = isAgent ? [corePresentationX, 0, 0] : [0, 0, 0];
+    const targetX = THREE.MathUtils.lerp(position[0], parked[0], presentationProgress.current);
+    const targetY = THREE.MathUtils.lerp(position[1], parked[1], presentationProgress.current);
+    const targetZ = THREE.MathUtils.lerp(position[2], parked[2], presentationProgress.current);
 
     const nodeTime = time + nodeSeed * 4.7;
     const glitchCycle = Math.floor(nodeTime / 4.7);
@@ -421,7 +434,7 @@ function JarvisNodeVisual({
 
     if (nodeCorruption > 0.08 && spawnProgress.current === null) {
       const twitch = glitching ? Math.sin(time * 89) * 0.1 * nodeCorruption : 0;
-      groupRef.current.position.set(position[0] + twitch, position[1] + (glitching ? Math.cos(time * 73) * 0.055 * nodeCorruption : 0), position[2]);
+      groupRef.current.position.set(targetX + twitch, targetY + (glitching ? Math.cos(time * 73) * 0.055 * nodeCorruption : 0), targetZ);
       groupRef.current.visible = !glitching || Math.sin(time * 103) > -0.7;
       if (glitchGhostRef.current) {
         glitchGhostRef.current.visible = glitching;
@@ -429,7 +442,7 @@ function JarvisNodeVisual({
         glitchGhostRef.current.rotation.z = Math.sin(time * 37) * 0.06;
       }
     } else if (spawnProgress.current === null) {
-      groupRef.current.position.set(...position);
+      groupRef.current.position.set(targetX, targetY + Math.sin(nodeTime * 0.72) * (isAgent ? 0 : 0.022), targetZ);
       groupRef.current.visible = true;
       if (glitchGhostRef.current) glitchGhostRef.current.visible = false;
     }
@@ -440,9 +453,9 @@ function JarvisNodeVisual({
       const eased = 1 - (1 - t) * (1 - t);
       if (groupRef.current && spawnFrom) {
         groupRef.current.position.set(
-          THREE.MathUtils.lerp(spawnFrom[0], position[0], eased),
-          THREE.MathUtils.lerp(spawnFrom[1], position[1], eased),
-          THREE.MathUtils.lerp(spawnFrom[2], position[2], eased),
+          THREE.MathUtils.lerp(spawnFrom[0], targetX, eased),
+          THREE.MathUtils.lerp(spawnFrom[1], targetY, eased),
+          THREE.MathUtils.lerp(spawnFrom[2], targetZ, eased),
         );
       }
       if (spawnOrbRef.current && spawnFrom) {
@@ -460,8 +473,9 @@ function JarvisNodeVisual({
     groupRef.current.rotation.y += delta * (isAgent ? 0.35 : 0.12);
     if (ring1Ref.current) ring1Ref.current.rotation.x += delta * (isAgent ? 0.5 : 0.2);
     if (ring2Ref.current) ring2Ref.current.rotation.z -= delta * (isAgent ? 0.7 : 0.3);
-    if (electronOrbitARef.current) electronOrbitARef.current.rotation.y += delta * 0.22;
-    if (electronOrbitBRef.current) electronOrbitBRef.current.rotation.z -= delta * 0.16;
+    if (ring1Ref.current && !isAgent) ring1Ref.current.rotation.z = Math.sin(nodeTime * 0.36) * 0.1;
+    if (electronOrbitARef.current) electronOrbitARef.current.rotation.y += delta * (hovered ? 0.62 : 0.2 + nodeSeed * 0.12);
+    if (electronOrbitBRef.current) electronOrbitBRef.current.rotation.z -= delta * (hovered ? 0.48 : 0.14 + nodeSeed * 0.1);
 
     // A newly discovered memory emits a single expanding holographic scan.
     if (discoveryPulseRef.current && spawnProgress.current !== null) {
@@ -479,7 +493,9 @@ function JarvisNodeVisual({
       : Math.sin(time * 1.2 + level) * 0.018;
       
     const spawnScale = spawnProgress.current === null ? 1 : Math.max(0.02, 1 - (1 - spawnProgress.current) ** 2);
-    groupRef.current.scale.setScalar(((active ? 1.22 : 1.0) + pulse) * spawnScale);
+    const hoverScale = hovered && !isAgent ? 1.13 : 1;
+    const stowScale = isAgent ? 1 : 1 - presentationProgress.current;
+    groupRef.current.scale.setScalar(((active ? 1.22 : 1.0) * hoverScale + pulse) * spawnScale * stowScale);
   });
 
   return (
@@ -533,7 +549,7 @@ function JarvisNodeVisual({
             /* Level 1: Octahedron */
             <octahedronGeometry args={[0.22, 0]} />
           )}
-          <meshBasicMaterial color={color} wireframe transparent opacity={active ? 1 : 0.72} />
+          <meshBasicMaterial color={color} wireframe transparent opacity={active || hovered ? 1 : 0.72} />
         </mesh>
         <mesh>
           <icosahedronGeometry args={[0.075, 1]} />
@@ -584,7 +600,7 @@ function JarvisNodeVisual({
         )}
         <mesh rotation={[Math.PI / 2.4, 0.25, 0]}>
           <torusGeometry args={[0.34, 0.009, 8, 48]} />
-          <meshBasicMaterial color={color} transparent opacity={active ? 0.68 : 0.34} />
+          <meshBasicMaterial color={color} transparent opacity={active || hovered ? 0.82 : 0.34} />
         </mesh>
         </group>
       )}
@@ -624,11 +640,11 @@ function JarvisNodeVisual({
         </Billboard>
       ) : (
         <Html position={[0, 0.55, 0]} center distanceFactor={9} zIndexRange={focused ? [30, 0] : [10, 0]}>
-          <div className={`node-label-tag${focused ? " selected" : ""}`} style={{ "--node-accent": color } as CSSProperties}>
+          <div className={`node-label-tag${focused ? " selected" : ""}${hovered ? " hovered" : ""}`} style={{ "--node-accent": color } as CSSProperties}>
             <i />
             <b aria-hidden="true">{node.kind.slice(0, 1).toUpperCase()}</b>
             <span>{node.label}</span>
-            {focused && <small>{node.kind}</small>}
+            {(focused || hovered) && <small>{focused ? "FOCUSED" : node.kind}</small>}
           </div>
         </Html>
       )}
@@ -649,15 +665,30 @@ function JarvisNodeVisual({
   );
 }
 
-function SceneControls({ selectedId, selectedPosition, orbitRef }: { selectedId: string; selectedPosition?: [number, number, number]; orbitRef: RefObject<Group | null> }) {
+function SceneControls({ selectedId, selectedPosition, orbitRef, spaceExtent, hologramMode }: { selectedId: string; selectedPosition?: [number, number, number]; orbitRef: RefObject<Group | null>; spaceExtent: number; hologramMode: boolean }) {
   const controlsRef = useRef<any>(null);
   const focusTarget = useRef(new THREE.Vector3());
   const focusPosition = useRef(new THREE.Vector3());
   const focusing = useRef(false);
   const lastSelectedId = useRef<string>(selectedId);
+  const lastHologramMode = useRef(hologramMode);
+
+  useEffect(() => {
+    if (lastHologramMode.current === hologramMode || !controlsRef.current) return;
+    lastHologramMode.current = hologramMode;
+    focusTarget.current.set(0, 0, 0);
+    orbitRef.current?.localToWorld(focusTarget.current);
+    const projectionDistance = hologramMode ? (window.innerWidth < 600 ? 9.5 : 13.5) : Math.max(9.2, spaceExtent * 2.15);
+    focusPosition.current.copy(focusTarget.current).add(new THREE.Vector3(0, 0, projectionDistance));
+    focusing.current = true;
+  }, [hologramMode, orbitRef, spaceExtent]);
 
   useEffect(() => {
     if (!selectedPosition || !controlsRef.current) return;
+    if (hologramMode) {
+      lastSelectedId.current = selectedId;
+      return;
+    }
     if (lastSelectedId.current !== selectedId) {
       lastSelectedId.current = selectedId;
       focusTarget.current.set(...selectedPosition);
@@ -665,7 +696,7 @@ function SceneControls({ selectedId, selectedPosition, orbitRef }: { selectedId:
       focusPosition.current.copy(focusTarget.current).add(new THREE.Vector3(0, 0, 4.0));
       focusing.current = true;
     }
-  }, [selectedId, selectedPosition, orbitRef]);
+  }, [selectedId, selectedPosition, orbitRef, hologramMode]);
 
   useFrame((_, delta) => {
     if (!focusing.current || !controlsRef.current) return;
