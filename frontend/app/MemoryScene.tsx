@@ -382,6 +382,9 @@ function JarvisNodeVisual({
   const glitchGhostRef = useRef<Group>(null);
   const ring1Ref = useRef<Mesh>(null);
   const ring2Ref = useRef<Mesh>(null);
+  const electronOrbitARef = useRef<Group>(null);
+  const electronOrbitBRef = useRef<Group>(null);
+  const discoveryPulseRef = useRef<Mesh>(null);
   const spawnProgress = useRef<number | null>(null);
   const spawnOrbRef = useRef<Group>(null);
   const [hovered, setHovered] = useState(false);
@@ -457,6 +460,19 @@ function JarvisNodeVisual({
     groupRef.current.rotation.y += delta * (isAgent ? 0.35 : 0.12);
     if (ring1Ref.current) ring1Ref.current.rotation.x += delta * (isAgent ? 0.5 : 0.2);
     if (ring2Ref.current) ring2Ref.current.rotation.z -= delta * (isAgent ? 0.7 : 0.3);
+    if (electronOrbitARef.current) electronOrbitARef.current.rotation.y += delta * 0.22;
+    if (electronOrbitBRef.current) electronOrbitBRef.current.rotation.z -= delta * 0.16;
+
+    // A newly discovered memory emits a single expanding holographic scan.
+    if (discoveryPulseRef.current && spawnProgress.current !== null) {
+      const scan = Math.min(1, spawnProgress.current * 1.55);
+      discoveryPulseRef.current.visible = scan < 1;
+      discoveryPulseRef.current.scale.setScalar(0.3 + scan * 1.55);
+      const material = discoveryPulseRef.current.material as THREE.MeshBasicMaterial;
+      material.opacity = (1 - scan) * 0.58;
+    } else if (discoveryPulseRef.current) {
+      discoveryPulseRef.current.visible = false;
+    }
 
     const pulse = isAgent
       ? voiceState === "speaking" ? speechLevel * 0.16 : Math.sin(time * (voiceState === "listening" ? 8 : 2)) * 0.035
@@ -501,7 +517,7 @@ function JarvisNodeVisual({
           <AudioWaveform color={color} voiceState={voiceState} speechLevel={speechLevel} />
         </>
       ) : (
-        /* Memory nodes: faceted holographic shell, luminous core, and rotating reticles. */
+        /* Memory nodes: a compact holographic atom with a faceted nucleus and orbiting electrons. */
         <group>
         <mesh ref={ring1Ref}>
           {level >= 4 ? (
@@ -523,6 +539,37 @@ function JarvisNodeVisual({
           <icosahedronGeometry args={[0.075, 1]} />
           <meshBasicMaterial color={color} transparent opacity={active ? 0.8 : 0.48} />
         </mesh>
+        {/* A few low-poly nucleons give the center the layered look of an element model. */}
+        {[0, 1, 2, 3].map((index) => (
+          <mesh key={index} position={[
+            Math.cos(index * Math.PI / 2 + nodeSeed * 5) * 0.052,
+            Math.sin(index * Math.PI / 2 + nodeSeed * 5) * 0.052,
+            (index % 2 ? 1 : -1) * 0.035,
+          ]}>
+            <sphereGeometry args={[0.027, 7, 6]} />
+            <meshBasicMaterial color={color} transparent opacity={active ? 0.95 : 0.66} />
+          </mesh>
+        ))}
+        <group ref={electronOrbitARef} rotation={[Math.PI / 2.35, 0.18, 0]}>
+          <mesh>
+            <torusGeometry args={[0.37, 0.004, 4, 40]} />
+            <meshBasicMaterial color={color} transparent opacity={active ? 0.42 : 0.2} depthWrite={false} />
+          </mesh>
+          <mesh position={[0.37, 0, 0]}>
+            <sphereGeometry args={[0.023, 8, 6]} />
+            <meshBasicMaterial color={color} />
+          </mesh>
+        </group>
+        <group ref={electronOrbitBRef} rotation={[0.35, Math.PI / 2.7, Math.PI / 3]}>
+          <mesh>
+            <torusGeometry args={[0.43, 0.004, 4, 40]} />
+            <meshBasicMaterial color={color} transparent opacity={active ? 0.32 : 0.15} depthWrite={false} />
+          </mesh>
+          <mesh position={[-0.43, 0, 0]}>
+            <sphereGeometry args={[0.02, 8, 6]} />
+            <meshBasicMaterial color={color} />
+          </mesh>
+        </group>
         {nodeCorruption > 0.08 && (
           <group ref={glitchGhostRef} visible={false}>
             <mesh>
@@ -559,6 +606,12 @@ function JarvisNodeVisual({
           <meshBasicMaterial color={color} transparent opacity={active ? 0.54 : 0.26} />
         </mesh>
       )}
+      {!isAgent && spawnFrom && (
+        <mesh ref={discoveryPulseRef} visible={false}>
+          <torusGeometry args={[0.3, 0.006, 5, 48]} />
+          <meshBasicMaterial color={color} transparent opacity={0} depthWrite={false} />
+        </mesh>
+      )}
 
       {isAgent ? (
         <Billboard follow>
@@ -573,6 +626,7 @@ function JarvisNodeVisual({
         <Html position={[0, 0.55, 0]} center distanceFactor={9} zIndexRange={focused ? [30, 0] : [10, 0]}>
           <div className={`node-label-tag${focused ? " selected" : ""}`} style={{ "--node-accent": color } as CSSProperties}>
             <i />
+            <b aria-hidden="true">{node.kind.slice(0, 1).toUpperCase()}</b>
             <span>{node.label}</span>
             {focused && <small>{node.kind}</small>}
           </div>

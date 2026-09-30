@@ -612,6 +612,19 @@ body, html {
   transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
 }
 .node-label-tag i { width: 5px; height: 5px; border-radius: 50%; background: var(--node-accent); box-shadow: 0 0 8px var(--node-accent); flex: 0 0 auto; }
+.node-label-tag b {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  color: var(--node-accent);
+  border: 1px solid color-mix(in srgb, var(--node-accent) 66%, transparent);
+  background: color-mix(in srgb, var(--node-accent) 10%, rgba(4,12,15,.92));
+  clip-path: polygon(25% 0,75% 0,100% 25%,100% 75%,75% 100%,25% 100%,0 75%,0 25%);
+  font: 700 8px/1 ui-monospace, monospace;
+  text-shadow: 0 0 7px var(--node-accent);
+}
 .node-label-tag span { overflow: hidden; text-overflow: ellipsis; }
 .node-label-tag small { color: var(--node-accent); font: 8px/1 monospace; text-transform: uppercase; letter-spacing: .12em; }
 .node-label-tag.selected { border-color: var(--node-accent); background: rgba(8,25,28,.96); box-shadow: 0 0 18px color-mix(in srgb, var(--node-accent) 24%, transparent); }
