@@ -1,9 +1,11 @@
 "use client";
 
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { Html, OrbitControls } from "@react-three/drei";
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import type { Group } from "three";
+import type { ReactNode } from "react";
 
 type Props = { title: string; archetype: string };
 const cyan = "#70fff1";
@@ -12,31 +14,60 @@ function HoloMaterial({ color = cyan, opacity = 0.34, wireframe = false }: { col
   return <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.4} transparent opacity={opacity} wireframe={wireframe} metalness={0.45} roughness={0.28} />;
 }
 
+function AnimatedHinge({ position, axis, angle, open, children }: { position: [number, number, number]; axis: "y" | "z"; angle: number; open: boolean; children: ReactNode }) {
+  const hinge = useRef<Group>(null);
+  useFrame((_, delta) => {
+    if (!hinge.current) return;
+    hinge.current.rotation[axis] = THREE.MathUtils.damp(hinge.current.rotation[axis], open ? angle : 0, 7.5, delta);
+  });
+  return <group ref={hinge} position={position}>{children}</group>;
+}
+
 function Car({ hood, trunk, doors, engine }: { hood: boolean; trunk: boolean; doors: boolean; engine: boolean }) {
-  const glass = "#a8fff8";
+  const shell = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-2.55, -0.18); shape.lineTo(-2.48, 0.06); shape.lineTo(-2.05, 0.25);
+    shape.lineTo(-1.45, 0.34); shape.lineTo(-0.92, 1.02); shape.quadraticCurveTo(-0.76, 1.2, -0.48, 1.2);
+    shape.lineTo(0.47, 1.2); shape.quadraticCurveTo(0.72, 1.18, 0.91, 0.96);
+    shape.lineTo(1.34, 0.37); shape.lineTo(2.14, 0.28); shape.lineTo(2.52, 0.08);
+    shape.lineTo(2.55, -0.14); shape.lineTo(2.28, -0.24); shape.lineTo(-2.28, -0.24); shape.closePath();
+    const geometry = new THREE.ExtrudeGeometry(shape, { depth: 1.8, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.055, bevelThickness: 0.055 });
+    geometry.translate(0, 0, -0.9);
+    return geometry;
+  }, []);
+  const shellEdges = useMemo(() => new THREE.EdgesGeometry(shell, 24), [shell]);
+  const cabin = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-1.36, 0.4); shape.lineTo(-0.82, 1.04); shape.quadraticCurveTo(-0.68, 1.12, -0.47, 1.12);
+    shape.lineTo(0.38, 1.12); shape.quadraticCurveTo(0.58, 1.1, 0.75, 0.91); shape.lineTo(1.13, 0.4); shape.closePath();
+    const geometry = new THREE.ExtrudeGeometry(shape, { depth: 1.34, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: 0.025, bevelThickness: 0.025 });
+    geometry.translate(0, 0, -0.67);
+    return geometry;
+  }, []);
+  const cabinEdges = useMemo(() => new THREE.EdgesGeometry(cabin, 18), [cabin]);
   return <group position={[0, -0.35, 0]} scale={0.78}>
-    {/* chassis and sculpted body */}
-    <mesh position={[0, 0, 0]}><boxGeometry args={[4.4, 0.62, 1.9]} /><HoloMaterial opacity={0.24} /></mesh>
-    <mesh position={[0, 0.28, 0]}><boxGeometry args={[3.65, 0.32, 1.75]} /><HoloMaterial opacity={0.17} /></mesh>
-    <mesh position={[-0.28, 0.73, 0]}><boxGeometry args={[2.05, 0.76, 1.48]} /><HoloMaterial color={glass} opacity={0.1} /></mesh>
-    {/* bright contour lines make the silhouette legible */}
-    <mesh position={[0, 0.02, 0]}><boxGeometry args={[4.48, 0.64, 1.98]} /><meshBasicMaterial color={cyan} wireframe transparent opacity={0.95} /></mesh>
-    <mesh position={[-0.28, 0.74, 0]}><boxGeometry args={[2.12, 0.8, 1.55]} /><meshBasicMaterial color={cyan} wireframe transparent opacity={0.8} /></mesh>
+    {/* Beveled, shaped vehicle shell and cabin replace the boxy placeholder silhouette. */}
+    <mesh geometry={shell}><HoloMaterial opacity={0.2} /></mesh>
+    <lineSegments geometry={shellEdges}><lineBasicMaterial color={cyan} transparent opacity={0.94} /></lineSegments>
+    <mesh geometry={cabin}><HoloMaterial color="#95efff" opacity={0.1} /></mesh>
+    <lineSegments geometry={cabinEdges}><lineBasicMaterial color="#a9fff8" transparent opacity={0.88} /></lineSegments>
+    <mesh position={[-0.1, 0.77, 0]}><boxGeometry args={[0.98, 0.04, 1.35]} /><meshStandardMaterial color="#bafffb" emissive="#58dcd8" emissiveIntensity={0.7} transparent opacity={0.25} /></mesh>
+    <mesh position={[0.76, 0.68, 0]} rotation={[0, 0, -0.45]}><boxGeometry args={[0.64, 0.035, 1.34]} /><meshStandardMaterial color="#bafffb" emissive="#58dcd8" emissiveIntensity={0.7} transparent opacity={0.25} /></mesh>
     {/* front hood is hinged and rotates open */}
-    <group position={[1.58, 0.34, 0]} rotation={[0, 0, hood ? -0.9 : 0]}>
+    <AnimatedHinge position={[1.58, 0.34, 0]} axis="z" angle={-0.9} open={hood}>
       <mesh position={[0.52, 0.08, 0]}><boxGeometry args={[1.28, 0.16, 1.78]} /><HoloMaterial opacity={0.32} /></mesh>
       <mesh position={[0.52, 0.09, 0]}><boxGeometry args={[1.31, 0.18, 1.81]} /><meshBasicMaterial color={cyan} wireframe transparent opacity={0.9} /></mesh>
-    </group>
+    </AnimatedHinge>
     {/* boot lid opens from its rear hinge */}
-    <group position={[-2.03, 0.36, 0]} rotation={[0, 0, trunk ? 0.85 : 0]}>
+    <AnimatedHinge position={[-2.03, 0.36, 0]} axis="z" angle={0.85} open={trunk}>
       <mesh position={[-0.42, 0.04, 0]}><boxGeometry args={[0.82, 0.15, 1.77]} /><HoloMaterial opacity={0.36} /></mesh>
       <mesh position={[-0.42, 0.05, 0]}><boxGeometry args={[0.85, 0.17, 1.8]} /><meshBasicMaterial color={cyan} wireframe transparent opacity={0.9} /></mesh>
-    </group>
+    </AnimatedHinge>
     {/* side doors swing outward; hinges sit at the B pillars */}
-    {[-1, 1].map((side) => <group key={side} position={[0.05, 0.28, side * 0.91]} rotation={[doors ? side * 0.7 : 0, 0, 0]}>
+    {[-1, 1].map((side) => <AnimatedHinge key={side} position={[0.05, 0.28, side * 0.91]} axis="y" angle={side * 0.72} open={doors}>
       <mesh position={[-0.1, 0.1, side * 0.38]}><boxGeometry args={[1.55, 0.48, 0.08]} /><HoloMaterial opacity={0.26} /></mesh>
       <mesh position={[-0.1, 0.1, side * 0.43]}><boxGeometry args={[1.6, 0.52, 0.05]} /><meshBasicMaterial color={cyan} wireframe transparent opacity={0.9} /></mesh>
-    </group>)}
+    </AnimatedHinge>)}
     {/* engine components appear above the bay when the hood opens */}
     {engine && hood && <group position={[1.12, 0.48, 0]}>
       <mesh><boxGeometry args={[0.95, 0.42, 1.05]} /><HoloMaterial color="#ffc36e" opacity={0.52} /></mesh>
@@ -71,8 +102,9 @@ function SubjectModel({ archetype, title }: Props) {
 }
 
 export default function Hologram3D({ title, archetype }: Props) {
-  const [parts, setParts] = useState({ hood: false, trunk: false, doors: false, engine: true });
+  const [parts, setParts] = useState({ hood: false, trunk: false, doors: false, engine: false });
   const toggle = (part: keyof typeof parts) => setParts((current) => ({ ...current, [part]: !current[part] }));
+  const toggleEngine = () => setParts((current) => ({ ...current, hood: current.engine ? current.hood : true, engine: !current.engine }));
   return <div className="holo-3d-shell">
     <div className="holo-3d-canvas" aria-label={`Interactive 3D ${title} model`}>
       <Canvas camera={{ position: [5.8, 3.2, 7], fov: 38 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: true }}>
@@ -87,7 +119,7 @@ export default function Hologram3D({ title, archetype }: Props) {
       <button className={parts.doors ? "selected" : ""} onClick={() => toggle("doors")}>{parts.doors ? "CLOSE" : "OPEN"} DOORS</button>
       <button className={parts.trunk ? "selected" : ""} onClick={() => toggle("trunk")}>{parts.trunk ? "CLOSE" : "OPEN"} TRUNK</button>
       <button className={parts.hood ? "selected" : ""} onClick={() => toggle("hood")}>{parts.hood ? "CLOSE" : "OPEN"} HOOD</button>
-      <button className={parts.engine ? "selected" : ""} onClick={() => toggle("engine")}>{parts.engine ? "HIDE" : "SHOW"} ENGINE</button>
+      <button className={parts.engine ? "selected" : ""} onClick={toggleEngine}>{parts.engine ? "HIDE" : "SHOW"} ENGINE</button>
     </div> : <p className="holo-3d-hint">DRAG TO ORBIT · SCROLL TO ZOOM</p>}
   </div>;
 }

@@ -43,11 +43,11 @@ function hologramArchetype(subject: string) {
   if (/\b(car|cars|vehicle|vehicles|automobile|automobiles|sedan|sports car|truck|motorcycle)\b/.test(text)) return "car";
   if (/\b(engine|motor|powertrain)\b/.test(text)) return "engine";
   if (/\b(planet|earth|moon|mars|jupiter|saturn|world|globe|solar system)\b/.test(text)) return "planet";
-  if (/\b(person|human|body|anatomy|skeleton)\b/.test(text)) return "human";
+  if (/\b(person|people|human|humans|body|anatomy|skeleton)\b/.test(text)) return "human";
   if (/\b(animal|dog|cat|horse|bird|fish|wolf|lion|elephant)\b/.test(text)) return "animal";
   if (/\b(molecule|atom|protein|cell|dna)\b/.test(text)) return "molecule";
   if (/\b(house|building|skyscraper|castle|tower)\b/.test(text)) return "building";
-  if (/\b(airplane|plane|aircraft|jet|helicopter|rocket)\b/.test(text)) return "aircraft";
+  if (/\b(airplane|airplanes|plane|planes|aircraft|jet|helicopter|rocket)\b/.test(text)) return "aircraft";
   if (/\b(tree|flower|plant|rose)\b/.test(text)) return "tree";
   return "object";
 }

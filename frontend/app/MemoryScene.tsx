@@ -639,7 +639,7 @@ function JarvisNodeVisual({
           </Text>
         </Billboard>
       ) : (
-        <Html position={[0, 0.55, 0]} center distanceFactor={9} zIndexRange={focused ? [30, 0] : [10, 0]}>
+        !hologramMode && <Html position={[0, 0.55, 0]} center distanceFactor={9} zIndexRange={focused ? [30, 0] : [10, 0]}>
           <div className={`node-label-tag${focused ? " selected" : ""}${hovered ? " hovered" : ""}`} style={{ "--node-accent": color } as CSSProperties}>
             <i />
             <b aria-hidden="true">{node.kind.slice(0, 1).toUpperCase()}</b>
