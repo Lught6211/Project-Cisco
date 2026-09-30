@@ -15,7 +15,26 @@ type EventItem = { id: string; type: string; title: string; detail: string; time
 type CaptionItem = { id: string; sender: "USER" | "CISCO" | "ULTRON"; text: string; time: string };
 type ConversationTurn = { role: "user" | "assistant"; content: string };
 type CorruptionCode = { id: number; value: string; left: number; top: number };
-type HologramSession = { nodeId: string; title: string; summary: string };
+type HologramSession = { nodeId: string; title: string; summary: string; projection: "car" | "memory" };
+
+function hologramSubject(prompt: string) {
+  const match = prompt.match(/\bhologram\b/i);
+  if (!match || match.index === undefined) return "";
+  const before = prompt.slice(0, match.index);
+  const after = prompt.slice(match.index + match[0].length);
+  const explicitObject = after.match(/\b(?:of|about|for|showing)\s+(.+)/i);
+  let subject = explicitObject?.[1] || after || before;
+  subject = subject
+    .replace(/^[\s,.:;!?-]*(?:please\s+)?(?:show|display|project|render|visualize|create|make|draw|build)?\s*/i, "")
+    .replace(/^(?:me\s+)?(?:a|an|the)\s+/i, "")
+    .replace(/^(?:of|about|for|showing)\s+/i, "")
+    .replace(/\b(?:please|for me|in 3d|in 3-d|as a hologram)\b/gi, " ")
+    .replace(/[?!.,]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (/^(?:a|an|the|me|it|this|that|something|anything)$/i.test(subject)) return "";
+  return subject;
+}
 
 export default function Home() {
   const [nodes, setNodes] = useState<Node[]>([
@@ -48,7 +67,9 @@ export default function Home() {
 
   const [selectedId, setSelectedId] = useState<string>("cisco");
   const [hologram, setHologram] = useState<HologramSession | null>(null);
-  const [hologramView, setHologramView] = useState<"field" | "intel">("field");
+  const [hologramView, setHologramView] = useState<"field" | "intel" | "model">("field");
+  const [hologramAngle, setHologramAngle] = useState(0);
+  const hologramDrag = useRef<{ x: number; angle: number } | null>(null);
   const [voiceState, setVoiceState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
   const [speechLevel, setSpeechLevel] = useState(0);
   const [inputMsg, setInputMsg] = useState("");
@@ -172,7 +193,7 @@ export default function Home() {
 
   const selectedNode = nodes.find((n) => n.id === selectedId) || nodes[0];
   const hologramNode = hologram ? nodes.find((node) => node.id === hologram.nodeId) || selectedNode : selectedNode;
-  const hologramNeighbors = hologram
+  const hologramNeighbors = hologram && hologram.projection === "memory"
     ? edges.flatMap((edge) => edge.source === hologram.nodeId
       ? [nodes.find((node) => node.id === edge.target)]
       : edge.target === hologram.nodeId ? [nodes.find((node) => node.id === edge.source)] : [])
@@ -441,27 +462,29 @@ export default function Home() {
       return;
     }
     if (!ultronMode && /\bhologram\b/i.test(prompt)) {
-      const lastAssistant = [...chatMessages].reverse().find((message) => message.sender === "CISCO");
-      const lastUser = [...chatMessages].reverse().find((message) => message.sender === "USER");
-      const explicitTopic = prompt
-        .replace(/\bhologram\b/gi, " ")
-        .replace(/\b(show|display|project|render|visualize|create|make|of|about|please|me|the|this|that|can|could|would|you|a|an|what|is|are|was|were|tell|explain)\b/gi, " ")
-        .replace(/[?!.,]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
+      const conversation = [...chatMessages].reverse();
+      const lastAssistant = conversation.find((message) => message.sender === "CISCO");
+      const lastUser = conversation.find((message) => message.sender === "USER");
+      const explicitTopic = hologramSubject(prompt);
       const genericReferences = new Set(["topic", "it", "this topic", "current topic", "current context", "current memory"]);
-      const useFocusedTopic = selectedNode.kind !== "agent" && (!explicitTopic || explicitTopic.length < 4 || genericReferences.has(explicitTopic.toLowerCase()));
+      const useFocusedTopic = !explicitTopic && selectedNode.kind !== "agent" && !genericReferences.has(selectedNode.label.toLowerCase());
       const previousTopic = lastUser?.text.replace(/^(what'?s|what is|what are|explain|tell me about|can you explain)\s+/i, "").replace(/[?!.,]+$/, "").trim();
-      const titleSource = useFocusedTopic
-        ? selectedNode.label
-        : explicitTopic || previousTopic || lastAssistant?.text || "CISCO memory field";
+      const titleSource = explicitTopic || (useFocusedTopic ? selectedNode.label : previousTopic || "CISCO memory field");
       const title = titleSource.length > 58 ? `${titleSource.slice(0, 55).trimEnd()}…` : titleSource;
-      const summary = useFocusedTopic
-        ? lastAssistant?.text || selectedNode.detail || "A live projection of this memory and its connected context."
-        : lastAssistant?.text || selectedNode.detail || "A live projection of the current CISCO context.";
-      setHologram({ nodeId: selectedNode.id, title, summary });
-      setHologramView("field");
-      const replyText = `Hologram projected: ${title}. Select a memory orbit or switch to INTEL to explore the current context.`;
+      const carProjection = /\b(car|cars|vehicle|vehicles|automobile|automobiles|sedan|sports car|truck|motorcycle)\b/i.test(title);
+      const matchedNode = explicitTopic
+        ? nodes.find((node) => node.kind !== "agent" && `${node.label} ${node.detail || ""}`.toLowerCase().includes(explicitTopic.toLowerCase()))
+        : undefined;
+      const nodeId = carProjection ? "cisco" : matchedNode?.id || (useFocusedTopic ? selectedNode.id : "cisco");
+      const summary = carProjection
+        ? "A rotatable 3D vehicle projection. Drag across the model to inspect it from every side."
+        : matchedNode?.detail || (useFocusedTopic ? lastAssistant?.text || selectedNode.detail : lastAssistant?.text) || "A live projection of the current CISCO context.";
+      setHologram({ nodeId, title, summary, projection: carProjection ? "car" : "memory" });
+      setHologramAngle(0);
+      setHologramView(carProjection ? "model" : "field");
+      const replyText = carProjection
+        ? `Projecting a 3D hologram of a ${title}. Drag the model to rotate it.`
+        : `Hologram projected: ${title}. Select a memory orbit or switch to INTEL to explore this context.`;
       const replyTime = new Date().toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
       const reply: CaptionItem = { id: `cap-${Date.now()}-hologram`, sender: "CISCO", text: replyText, time: replyTime };
       setCaptions((prev) => [...prev, reply]);
@@ -801,11 +824,33 @@ export default function Home() {
             <span className="holo-live"><i /> LIVE</span>
           </div>
           <div className="holo-toolbar" role="tablist" aria-label="Hologram views">
-            <button role="tab" aria-selected={hologramView === "field"} className={hologramView === "field" ? "active" : ""} onClick={() => setHologramView("field")}>MEMORY FIELD</button>
+            {hologram.projection === "car" ? <button role="tab" aria-selected={hologramView === "model"} className={hologramView === "model" ? "active" : ""} onClick={() => setHologramView("model")}>3D MODEL</button> : <button role="tab" aria-selected={hologramView === "field"} className={hologramView === "field" ? "active" : ""} onClick={() => setHologramView("field")}>MEMORY FIELD</button>}
             <button role="tab" aria-selected={hologramView === "intel"} className={hologramView === "intel" ? "active" : ""} onClick={() => setHologramView("intel")}>INTEL</button>
             <kbd>ESC TO DISMISS</kbd>
           </div>
-          {hologramView === "field" ? (
+          {hologram.projection === "car" && hologramView === "model" ? (
+            <div className="holo-field holo-car-stage" onPointerDown={(event) => { hologramDrag.current = { x: event.clientX, angle: hologramAngle }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (hologramDrag.current) setHologramAngle(hologramDrag.current.angle + (event.clientX - hologramDrag.current.x) * 0.65); }} onPointerUp={() => { hologramDrag.current = null; }} onPointerCancel={() => { hologramDrag.current = null; }}>
+              <div className="holo-car-grid" />
+              <div className="holo-car-model" style={{ transform: `translate(-50%, -54%) perspective(900px) rotateY(${hologramAngle}deg) rotateX(-8deg)` }}>
+                <svg viewBox="0 0 520 300" role="img" aria-label="Rotatable cyan wireframe 3D car hologram">
+                  <defs><linearGradient id="carBody" x1="0" x2="1" y1="0" y2="1"><stop stopColor="#9bfff5" stopOpacity=".5"/><stop offset="1" stopColor="#35a9c6" stopOpacity=".08"/></linearGradient><filter id="carGlow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+                  <g filter="url(#carGlow)" stroke="#76fff0" strokeWidth="2" strokeLinejoin="round">
+                    <path d="M55 171 97 139 172 121 220 71 332 69 390 132 446 149 474 178 456 205 78 207 48 190Z" fill="url(#carBody)"/>
+                    <path d="m172 121 48-50h112l58 61-91-9-38-39-46 1-31 38Z" fill="#72dff1" fillOpacity=".12"/>
+                    <path d="m224 81-29 38 65-2V81Zm47 0v36l69 7-34-43Z" fill="#a4fff8" fillOpacity=".08"/>
+                    <path d="m97 139 77-18 48-50m-27 51 38 1 82 1 82 8M174 121l-10 84m166-87 14 87M227 158h111m-92 0-13 47m104-47 14 47M55 171h55m278-39 58 17" fill="none" opacity=".84"/>
+                    <path d="m63 177 43-6-5 18-42-2Zm350-29 44 11 9 14-48-5Z" fill="#adfff7" fillOpacity=".36"/>
+                    <path d="m79 207 17-4m337 0 14 3" fill="none" strokeDasharray="5 5"/>
+                    <g fill="#06181c" strokeWidth="3"><ellipse cx="145" cy="205" rx="39" ry="42"/><ellipse cx="390" cy="205" rx="39" ry="42"/></g>
+                    <g fill="none" strokeWidth="2"><circle cx="145" cy="205" r="24"/><circle cx="390" cy="205" r="24"/><path d="m145 181v48m-24-24h48m-17-17-17 34m0-34 17 34m221-41v48m-24-24h48m-17-17-17 34m0-34 17 34"/></g>
+                    <path d="M39 221h447M77 229h364" fill="none" strokeDasharray="2 9" opacity=".5"/>
+                  </g>
+                </svg>
+              </div>
+              <span className="holo-car-instruction">DRAG TO ROTATE · 360° OBJECT SCAN</span>
+              <span className="holo-car-axis">X · Y · Z / LIVE PROJECTION</span>
+            </div>
+          ) : hologramView === "field" ? (
             <div className="holo-field">
               <svg className="holo-links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                 {hologramOrbitNodes.map(({ node, x, y }) => <line key={node.id} x1="50" y1="50" x2={x} y2={y} />)}
@@ -815,7 +860,7 @@ export default function Home() {
               {hologramOrbitNodes.map(({ node, x, y }) => (
                 <button key={node.id} className={`holo-satellite kind-${node.kind}`} style={{ left: `${x}%`, top: `${y}%` }} onClick={() => {
                   setSelectedId(node.id);
-                  setHologram({ nodeId: node.id, title: node.label, summary: node.detail || `Connected memory in the ${hologram.title} branch.` });
+                  setHologram({ nodeId: node.id, title: node.label, summary: node.detail || `Connected memory in the ${hologram.title} branch.`, projection: "memory" });
                 }} title={`Project ${node.label}`}>
                   <i />{node.label}
                 </button>
@@ -831,7 +876,7 @@ export default function Home() {
                   <article key={`${index}-${insight}`}><b>{String(index + 1).padStart(2, "0")}</b><span>{insight}</span></article>
                 ))}
               </div>
-              {!!hologramOrbitNodes.length && <div className="holo-related"><small>CONNECTED MEMORY</small>{hologramOrbitNodes.map(({ node }) => <button key={node.id} onClick={() => { setSelectedId(node.id); setHologram({ nodeId: node.id, title: node.label, summary: node.detail || `Connected memory in the ${hologram.title} branch.` }); }}>{node.label}<span>↗</span></button>)}</div>}
+              {!!hologramOrbitNodes.length && <div className="holo-related"><small>CONNECTED MEMORY</small>{hologramOrbitNodes.map(({ node }) => <button key={node.id} onClick={() => { setSelectedId(node.id); setHologram({ nodeId: node.id, title: node.label, summary: node.detail || `Connected memory in the ${hologram.title} branch.`, projection: "memory" }); }}>{node.label}<span>↗</span></button>)}</div>}
             </div>
           )}
           <footer className="holo-footer"><span>PROJECTION SOURCE: CISCO MEMORY GRAPH</span><span>{hologramNeighbors.length} LINKS</span></footer>

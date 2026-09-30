@@ -373,6 +373,14 @@ body, html {
 .holo-toolbar button.active,.holo-toolbar button:hover { border-color:rgba(82,229,218,.32); color:#8df6ee; background:rgba(82,229,218,.08); }
 .holo-toolbar kbd { margin-left:auto; color:#53716f; font:8px monospace; }
 .holo-field { position:relative; height:clamp(230px,34vh,330px); margin:8px 16px 4px; overflow:hidden; border:1px solid rgba(82,229,218,.13); background:radial-gradient(ellipse at center,rgba(44,177,172,.12),transparent 65%),linear-gradient(rgba(82,229,218,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(82,229,218,.025) 1px,transparent 1px); background-size:auto,24px 24px,24px 24px; }
+.holo-car-stage { min-height:270px; height:clamp(270px,40vh,380px); perspective:1000px; cursor:grab; touch-action:none; }
+.holo-car-stage:active { cursor:grabbing; }
+.holo-car-grid { position:absolute; left:-15%; right:-15%; bottom:-52%; height:90%; transform:rotateX(66deg); transform-origin:top center; background-image:linear-gradient(rgba(82,229,218,.15) 1px,transparent 1px),linear-gradient(90deg,rgba(82,229,218,.15) 1px,transparent 1px); background-size:26px 26px; mask-image:linear-gradient(to bottom,transparent,black 35%,transparent); }
+.holo-car-model { position:absolute; left:50%; top:46%; width:min(94%,510px); transform-style:preserve-3d; transition:filter .2s ease; filter:drop-shadow(0 0 12px rgba(82,229,218,.38)); }
+.holo-car-model svg { display:block; width:100%; overflow:visible; }
+.holo-car-stage:hover .holo-car-model { filter:drop-shadow(0 0 20px rgba(82,229,218,.65)); }
+.holo-car-instruction,.holo-car-axis { position:absolute; bottom:10px; color:#71aaa5; font:700 7px/1 monospace; letter-spacing:.1em; pointer-events:none; }
+.holo-car-instruction { left:10px; }.holo-car-axis { right:10px; }
 .holo-links { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
 .holo-links line { stroke:rgba(107,246,236,.48); stroke-width:.28; stroke-dasharray:1.5 1.2; animation:holo-data-flow 3s linear infinite; }
 .holo-links circle { fill:none; stroke:rgba(82,229,218,.18); stroke-width:.2; stroke-dasharray:1 1.6; }
