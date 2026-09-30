@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 import * as THREE from "three";
 import type { Group, Mesh } from "three";
+import { WorldHologram } from "./Hologram3D";
 
 type MemoryNode = { 
   id: string; 
@@ -43,7 +44,10 @@ export default function MemoryScene({
   speechLevel,
   corruption = 0,
   hologramMode = false,
-  onSelect
+  hologramModel = null,
+  cameraResetToken = 0,
+  onHologramDismiss,
+  onSelect,
 }: {
   nodes?: MemoryNode[];
   edges?: MemoryEdge[];
@@ -52,6 +56,9 @@ export default function MemoryScene({
   speechLevel: number;
   corruption?: number;
   hologramMode?: boolean;
+  hologramModel?: { title: string; archetype: string } | null;
+  cameraResetToken?: number;
+  onHologramDismiss?: () => void;
   onSelect: (id: string) => void;
 }) {
   const safeNodes = Array.isArray(nodes) ? nodes : [];
@@ -234,12 +241,15 @@ export default function MemoryScene({
             speechLevel={speechLevel}
             corruption={corruption}
             hologramMode={hologramMode}
+            onHologramDismiss={onHologramDismiss}
             onSelect={onSelect}
           />
         ))}
       </OrbitalDrift>
 
-      <SceneControls selectedId={selected} selectedPosition={positions.get(selected)} orbitRef={orbitRef} spaceExtent={spaceExtent} hologramMode={hologramMode} />
+      {hologramModel && <WorldHologram title={hologramModel.title} archetype={hologramModel.archetype} onDismiss={onHologramDismiss || (() => {})} />}
+
+      <SceneControls selectedId={selected} selectedPosition={positions.get(selected)} orbitRef={orbitRef} spaceExtent={spaceExtent} hologramMode={hologramMode} cameraResetToken={cameraResetToken} />
     </Canvas>
   );
 }
@@ -370,6 +380,7 @@ function JarvisNodeVisual({
   speechLevel,
   corruption,
   hologramMode,
+  onHologramDismiss,
   onSelect 
 }: { 
   node: MemoryNode; 
@@ -382,6 +393,7 @@ function JarvisNodeVisual({
   speechLevel: number;
   corruption: number;
   hologramMode: boolean;
+  onHologramDismiss?: () => void;
   onSelect: (id: string) => void 
 }) {
   const groupRef = useRef<Group>(null);
@@ -504,6 +516,7 @@ function JarvisNodeVisual({
       ref={groupRef}
       position={position}
       onClick={(e) => { e.stopPropagation(); onSelect(node.id); }}
+      onDoubleClick={(e) => { e.stopPropagation(); if (isAgent && hologramMode) onHologramDismiss?.(); else if (isAgent) onSelect(node.id); }}
       onPointerEnter={(e) => { e.stopPropagation(); setHovered(true); }}
       onPointerLeave={() => setHovered(false)}
     >
@@ -665,23 +678,56 @@ function JarvisNodeVisual({
   );
 }
 
-function SceneControls({ selectedId, selectedPosition, orbitRef, spaceExtent, hologramMode }: { selectedId: string; selectedPosition?: [number, number, number]; orbitRef: RefObject<Group | null>; spaceExtent: number; hologramMode: boolean }) {
+function SceneControls({ selectedId, selectedPosition, orbitRef, spaceExtent, hologramMode, cameraResetToken }: { selectedId: string; selectedPosition?: [number, number, number]; orbitRef: RefObject<Group | null>; spaceExtent: number; hologramMode: boolean; cameraResetToken: number }) {
   const controlsRef = useRef<any>(null);
+  const camera = useThree((state) => state.camera);
   const focusTarget = useRef(new THREE.Vector3());
   const focusPosition = useRef(new THREE.Vector3());
   const focusing = useRef(false);
   const lastSelectedId = useRef<string>(selectedId);
   const lastHologramMode = useRef(hologramMode);
+  const savedCamera = useRef<{ position: THREE.Vector3; target: THREE.Vector3 } | null>(null);
+
+  const applyCameraPose = (target: THREE.Vector3, position: THREE.Vector3) => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    controls.reset();
+    controls.target.copy(target);
+    camera.position.copy(position);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(target);
+    controls.update();
+    controls.saveState();
+    focusTarget.current.copy(target);
+    focusPosition.current.copy(position);
+    focusing.current = false;
+  };
 
   useEffect(() => {
     if (lastHologramMode.current === hologramMode || !controlsRef.current) return;
     lastHologramMode.current = hologramMode;
-    focusTarget.current.set(0, 0, 0);
-    orbitRef.current?.localToWorld(focusTarget.current);
-    const projectionDistance = hologramMode ? (window.innerWidth < 600 ? 9.5 : 13.5) : Math.max(9.2, spaceExtent * 2.15);
-    focusPosition.current.copy(focusTarget.current).add(new THREE.Vector3(0, 0, projectionDistance));
-    focusing.current = true;
-  }, [hologramMode, orbitRef, spaceExtent]);
+    const controls = controlsRef.current;
+    if (hologramMode) {
+      savedCamera.current = { position: camera.position.clone(), target: controls.target.clone() };
+      const target = new THREE.Vector3(0, 0, 0);
+      const distance = window.innerWidth < 600 ? 19 : 13.5;
+      const position = target.clone().add(new THREE.Vector3(0, 0.35, distance));
+      focusTarget.current.copy(target);
+      focusPosition.current.copy(position);
+      focusing.current = true;
+    } else if (savedCamera.current) {
+      applyCameraPose(savedCamera.current.target, savedCamera.current.position);
+      savedCamera.current = null;
+    }
+  }, [hologramMode, orbitRef, spaceExtent, camera]);
+
+  useEffect(() => {
+    if (!cameraResetToken || !controlsRef.current) return;
+    const target = new THREE.Vector3(0, 0, 0);
+    const distance = hologramMode ? (window.innerWidth < 600 ? 19 : 13.5) : Math.max(9.2, spaceExtent * 2.15);
+    const position = target.clone().add(new THREE.Vector3(0, 0.35, distance));
+    applyCameraPose(target, position);
+  }, [cameraResetToken, camera, hologramMode, spaceExtent]);
 
   useEffect(() => {
     if (!selectedPosition || !controlsRef.current) return;
@@ -707,5 +753,5 @@ function SceneControls({ selectedId, selectedPosition, orbitRef, spaceExtent, ho
     if (controlsRef.current.object.position.distanceTo(focusPosition.current) < 0.04) focusing.current = false;
   });
 
-  return <OrbitControls ref={controlsRef} enablePan enableZoom zoomToCursor minDistance={2.5} maxDistance={22} enableDamping dampingFactor={0.08} makeDefault />;
+  return <OrbitControls ref={controlsRef} enablePan enableZoom zoomToCursor minDistance={2.5} maxDistance={Math.max(22, spaceExtent * 2.6)} enableDamping dampingFactor={0.08} makeDefault />;
 }

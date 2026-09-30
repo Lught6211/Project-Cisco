@@ -1,7 +1,7 @@
 "use client";
 
-import { Canvas, useFrame } from "@react-three/fiber";
-import { Html, OrbitControls } from "@react-three/drei";
+import { useFrame } from "@react-three/fiber";
+import { Html } from "@react-three/drei";
 import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Group } from "three";
@@ -101,25 +101,26 @@ function SubjectModel({ archetype, title }: Props) {
   }
 }
 
-export default function Hologram3D({ title, archetype }: Props) {
+export function WorldHologram({ title, archetype, onDismiss }: Props & { onDismiss: () => void }) {
   const [parts, setParts] = useState({ hood: false, trunk: false, doors: false, engine: false });
+  const mobile = typeof window !== "undefined" && window.innerWidth < 600;
   const toggle = (part: keyof typeof parts) => setParts((current) => ({ ...current, [part]: !current[part] }));
   const toggleEngine = () => setParts((current) => ({ ...current, hood: current.engine ? current.hood : true, engine: !current.engine }));
-  return <div className="holo-3d-shell">
-    <div className="holo-3d-canvas" aria-label={`Interactive 3D ${title} model`}>
-      <Canvas camera={{ position: [5.8, 3.2, 7], fov: 38 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: true }}>
-        <ambientLight intensity={1.5} /><pointLight position={[4, 6, 5]} color="#8cfff4" intensity={48} /><pointLight position={[-5, 2, -4]} color="#819bff" intensity={20} />
-        <gridHelper args={[12, 24, "#2bbeb6", "#164149"]} position={[0, -1.55, 0]} />
-        {archetype === "car" ? <Car {...parts} /> : <SubjectModel archetype={archetype} title={title} />}
-        <OrbitControls makeDefault enableDamping dampingFactor={0.08} minDistance={3.2} maxDistance={12} target={[0, 0, 0]} />
-      </Canvas>
-      <div className="holo-3d-crosshair" aria-hidden="true">⌖</div>
-    </div>
-    {archetype === "car" ? <div className="holo-part-controls" aria-label="Car model controls">
-      <button className={parts.doors ? "selected" : ""} onClick={() => toggle("doors")}>{parts.doors ? "CLOSE" : "OPEN"} DOORS</button>
-      <button className={parts.trunk ? "selected" : ""} onClick={() => toggle("trunk")}>{parts.trunk ? "CLOSE" : "OPEN"} TRUNK</button>
-      <button className={parts.hood ? "selected" : ""} onClick={() => toggle("hood")}>{parts.hood ? "CLOSE" : "OPEN"} HOOD</button>
-      <button className={parts.engine ? "selected" : ""} onClick={toggleEngine}>{parts.engine ? "HIDE" : "SHOW"} ENGINE</button>
-    </div> : <p className="holo-3d-hint">DRAG TO ORBIT · SCROLL TO ZOOM</p>}
-  </div>;
+  return <group position={[mobile ? 3.15 : 4.35, 0, 0]} scale={mobile ? 0.6 : 0.82}>
+    <Html position={[0, 2.12, 0]} center distanceFactor={10}>
+      <div className="world-model-title"><i /> 3D PROJECTION / {title.toUpperCase()}</div>
+    </Html>
+    {archetype === "car" ? <Car {...parts} /> : <SubjectModel archetype={archetype} title={title} />}
+    <Html position={[0, -1.7, 0]} center>
+      <div className="world-model-tools" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+        {archetype === "car" && <>
+          <button className={parts.doors ? "selected" : ""} onClick={() => toggle("doors")}>{parts.doors ? "CLOSE" : "OPEN"} DOORS</button>
+          <button className={parts.trunk ? "selected" : ""} onClick={() => toggle("trunk")}>{parts.trunk ? "CLOSE" : "OPEN"} TRUNK</button>
+          <button className={parts.hood ? "selected" : ""} onClick={() => toggle("hood")}>{parts.hood ? "CLOSE" : "OPEN"} HOOD</button>
+          <button className={parts.engine ? "selected" : ""} onClick={toggleEngine}>{parts.engine ? "HIDE" : "SHOW"} ENGINE</button>
+        </>}
+        <button className="world-model-dismiss" onClick={onDismiss}>RETURN TO MEMORY</button>
+      </div>
+    </Html>
+  </group>;
 }

@@ -6,7 +6,6 @@ import dynamic from "next/dynamic";
 import "./scene.css";
 
 const MemoryScene = dynamic(() => import("./MemoryScene"), { ssr: false });
-const Hologram3D = dynamic(() => import("./Hologram3D"), { ssr: false });
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || "https://cisco-backend-yve2.onrender.com").replace(/\/+$/, "");
 
@@ -82,6 +81,7 @@ export default function Home() {
   const voiceChoiceLockedRef = useRef(false);
 
   const [selectedId, setSelectedId] = useState<string>("cisco");
+  const [cameraResetToken, setCameraResetToken] = useState(0);
   const [hologram, setHologram] = useState<HologramSession | null>(null);
   const [hologramView, setHologramView] = useState<"field" | "intel" | "model">("field");
   const [voiceState, setVoiceState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
@@ -592,6 +592,9 @@ export default function Home() {
           speechLevel={speechLevel}
           corruption={corruption}
           hologramMode={Boolean(hologram)}
+          hologramModel={hologram?.projection === "model" ? { title: hologram.title, archetype: hologram.archetype } : null}
+          cameraResetToken={cameraResetToken}
+          onHologramDismiss={() => setHologram(null)}
           onSelect={selectNode}
         />
       </div>
@@ -780,8 +783,8 @@ export default function Home() {
           </svg>
         </button>
         <button
-          title="Focus Node"
-          onClick={() => togglePanel("focus")}
+          title="Reset camera and inspect focused node"
+          onClick={() => { setSelectedId("cisco"); setCameraResetToken((token) => token + 1); togglePanel("focus"); }}
           className={openPanels.focus ? "active" : ""}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -826,7 +829,7 @@ export default function Home() {
         </button>
       </div>
 
-      {hologram && (
+      {hologram && hologram.projection !== "model" && (
         <aside className="holo-projection" role="dialog" aria-label={`Interactive hologram: ${hologram.title}`}>
           <div className="holo-scanline" />
           <header className="holo-header">
@@ -838,13 +841,11 @@ export default function Home() {
             <span className="holo-live"><i /> LIVE</span>
           </div>
           <div className="holo-toolbar" role="tablist" aria-label="Hologram views">
-            {hologram.projection === "model" ? <button role="tab" aria-selected={hologramView === "model"} className={hologramView === "model" ? "active" : ""} onClick={() => setHologramView("model")}>3D MODEL</button> : <button role="tab" aria-selected={hologramView === "field"} className={hologramView === "field" ? "active" : ""} onClick={() => setHologramView("field")}>MEMORY FIELD</button>}
+            <button role="tab" aria-selected={hologramView === "field"} className={hologramView === "field" ? "active" : ""} onClick={() => setHologramView("field")}>MEMORY FIELD</button>
             <button role="tab" aria-selected={hologramView === "intel"} className={hologramView === "intel" ? "active" : ""} onClick={() => setHologramView("intel")}>INTEL</button>
             <kbd>ESC TO DISMISS</kbd>
           </div>
-          {hologram.projection === "model" && hologramView === "model" ? (
-            <div className="holo-field holo-model-stage"><Hologram3D title={hologram.title} archetype={hologram.archetype} /></div>
-          ) : hologramView === "field" ? (
+          {hologramView === "field" ? (
             <div className="holo-field">
               <svg className="holo-links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                 {hologramOrbitNodes.map(({ node, x, y }) => <line key={node.id} x1="50" y1="50" x2={x} y2={y} />)}
