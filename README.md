@@ -11,6 +11,7 @@ CiscoAI is a local-first foundation for an autonomous, voice-enabled AI agent wi
 - `backend/data/memory.json`: created on first API start and used as the local memory store.
 - `frontend/`: Next.js dashboard with a rendered memory topology, voice-session simulation, telemetry, and directive input.
 - `frontend/app/MemoryScene.tsx`: orbitable Three.js memory graph with depth, lighting, touch gestures, and selectable nodes.
+- Topic-scoped chat history keeps explicit `user`/`assistant` turn types, including local Kaizen responses, so the production TypeScript build accepts every chat path.
 - Gemini is the default hosted provider when `GEMINI_API_KEY` is configured. Local Ollama remains available without a paid API key.
 
 ## Run locally

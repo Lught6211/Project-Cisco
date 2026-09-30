@@ -365,7 +365,12 @@ export default function Home() {
       const reply: CaptionItem = { id: `cap-${Date.now()}-kaizen`, sender: "CISCO", text: report, time: replyTime };
       setCaptions((prev) => [...prev, reply]);
       setChatMessages((prev) => [...prev, reply]);
-      conversationsByTopicRef.current.set(historyKey, [...recentHistory, { role: "user", content: prompt }, { role: "assistant", content: report }].slice(-12));
+      const updatedHistory: ConversationTurn[] = [
+        ...recentHistory,
+        { role: "user", content: prompt },
+        { role: "assistant", content: report },
+      ].slice(-12);
+      conversationsByTopicRef.current.set(historyKey, updatedHistory);
       setKaizenScan({ nodes: nodes.length, links: edges.length, isolated, types });
       setEvents((prev) => [{ id: `evt-${Date.now()}-kaizen`, type: "system", title: "Kaizen graph sweep", detail: `${isolated} isolated memories found across ${types} node types`, timestamp: "just now" }, ...prev]);
       speakReply(report);
