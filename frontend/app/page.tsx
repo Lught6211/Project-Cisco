@@ -128,6 +128,8 @@ export default function Home() {
   const [chatPos, setChatPos] = useState({ x: 70, y: 472 });
   const [telemetryPos, setTelemetryPos] = useState({ x: 70, y: 152 });
   const [focusPos, setFocusPos] = useState({ x: 0, y: 112 });
+  const [panelZ, setPanelZ] = useState({ chat: 32, telemetry: 30, focus: 31 });
+  const panelZCounter = useRef(32);
 
   useEffect(() => {
     const placePanels = () => {
@@ -325,23 +327,41 @@ export default function Home() {
     }
   };
 
+  const raisePanel = (panel: "chat" | "telemetry" | "focus") => {
+    panelZCounter.current += 1;
+    setPanelZ((prev) => ({ ...prev, [panel]: panelZCounter.current }));
+  };
   const closePanel = (panel: "chat" | "telemetry" | "focus") => {
     setClosingPanels((prev) => ({ ...prev, [panel]: true }));
     window.setTimeout(() => {
       setOpenPanels((prev) => ({ ...prev, [panel]: false }));
       setClosingPanels((prev) => ({ ...prev, [panel]: false }));
-    }, 360);
+    }, 220);
   };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || navigatorOpen) return;
+      const topPanel = (Object.keys(panelZ) as Array<keyof typeof panelZ>)
+        .filter((panel) => openPanels[panel])
+        .sort((a, b) => panelZ[b] - panelZ[a])[0];
+      if (topPanel) {
+        event.preventDefault();
+        closePanel(topPanel);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [navigatorOpen, openPanels, panelZ]);
   const togglePanel = (panel: "chat" | "telemetry" | "focus") => {
     if (openPanels[panel]) closePanel(panel);
     else {
+      raisePanel(panel);
       setClosingPanels((prev) => ({ ...prev, [panel]: false }));
       setOpenPanels((prev) => window.innerWidth <= 900
         ? { chat: panel === "chat", telemetry: panel === "telemetry", focus: panel === "focus" }
         : { ...prev, [panel]: true });
     }
   };
-
   const handleSendMessage = async () => {
     if (!inputMsg.trim() || isSending) return;
     const prompt = inputMsg;
@@ -540,7 +560,7 @@ export default function Home() {
 
       {/* 1. System Telemetry Window */}
       {openPanels.telemetry && (
-        <div className={`hud-panel telemetry-panel draggable-panel ${closingPanels.telemetry ? "hud-powering-off" : "hud-powering-on"}`} style={{ top: `${telemetryPos.y}px`, left: `${telemetryPos.x}px` }}>
+        <div className={`hud-panel telemetry-panel draggable-panel ${closingPanels.telemetry ? "hud-powering-off" : "hud-powering-on"}`} onPointerDown={() => raisePanel("telemetry")} style={{ top: `${telemetryPos.y}px`, left: `${telemetryPos.x}px`, zIndex: closingPanels.telemetry ? 50 : panelZ.telemetry }}>
           <div className="hud-corner top-left" />
           <div className="hud-corner top-right" />
           <div className="hud-corner bottom-left" />
@@ -571,7 +591,7 @@ export default function Home() {
 
       {/* 2. Focus Node Inspection Window */}
       {openPanels.focus && (
-        <div className={`hud-panel focus-panel draggable-panel ${closingPanels.focus ? "hud-powering-off" : "hud-powering-on"}`} style={{ top: `${focusPos.y}px`, left: `${focusPos.x}px` }}>
+        <div className={`hud-panel focus-panel draggable-panel ${closingPanels.focus ? "hud-powering-off" : "hud-powering-on"}`} onPointerDown={() => raisePanel("focus")} style={{ top: `${focusPos.y}px`, left: `${focusPos.x}px`, zIndex: closingPanels.focus ? 50 : panelZ.focus }}>
           <div className="hud-corner top-left" />
           <div className="hud-corner top-right" />
           <div className="hud-corner bottom-left" />
@@ -615,7 +635,7 @@ export default function Home() {
 
       {/* 3. CiscoAI Chat Panel */}
       {openPanels.chat && (
-        <div className={`hud-panel chat-panel draggable-panel ${closingPanels.chat ? "hud-powering-off" : "hud-powering-on"}`} style={{ top: `${chatPos.y}px`, left: `${chatPos.x}px` }}>
+        <div className={`hud-panel chat-panel draggable-panel ${closingPanels.chat ? "hud-powering-off" : "hud-powering-on"}`} onPointerDown={() => raisePanel("chat")} style={{ top: `${chatPos.y}px`, left: `${chatPos.x}px`, zIndex: closingPanels.chat ? 50 : panelZ.chat }}>
           <div className="hud-corner top-left" />
           <div className="hud-corner top-right" />
           <div className="hud-corner bottom-left" />
