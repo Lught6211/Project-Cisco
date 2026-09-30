@@ -229,7 +229,7 @@ export default function MemoryScene({
             spawnFrom={spawnOrigins.get(node.id)}
             level={relationshipLevels.get(node.id) ?? 1}
             active={selected === node.id || node.active === true}
-            focused={selected === node.id}
+              focused={!hologramMode && selected === node.id}
             voiceState={voiceState}
             speechLevel={speechLevel}
             corruption={corruption}
