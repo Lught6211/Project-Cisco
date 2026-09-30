@@ -367,8 +367,8 @@ export default function Home() {
       setChatMessages((prev) => [...prev, reply]);
       const updatedHistory: ConversationTurn[] = [
         ...recentHistory,
-        { role: "user", content: prompt },
-        { role: "assistant", content: report },
+        { role: "user" as const, content: prompt },
+        { role: "assistant" as const, content: report },
       ].slice(-12);
       conversationsByTopicRef.current.set(historyKey, updatedHistory);
       setKaizenScan({ nodes: nodes.length, links: edges.length, isolated, types });
