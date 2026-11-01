@@ -896,3 +896,51 @@ body, html {
   .core-orbit,.core-ring,.graph-core-node.node-active .node-radar { animation:none!important; }
   .homelab-console { animation:none!important; }
 }
+
+/* CISCO operations field: a living 2D point lattice, with low-cost CSS motion. */
+.graph-2d-viewport { isolation:isolate; background:radial-gradient(ellipse at 50% 52%,rgba(20,74,82,.14),transparent 56%),linear-gradient(180deg,rgba(3,10,13,.06),rgba(3,10,13,.25)); }
+.graph-space-field { position:absolute; z-index:0; inset:-13%; pointer-events:none; opacity:.78; background-image:radial-gradient(circle,rgba(75,211,211,.36) .7px,transparent 1.25px),radial-gradient(circle,rgba(93,151,218,.22) .65px,transparent 1.25px),radial-gradient(ellipse at 50% 52%,rgba(49,157,171,.12),transparent 58%); background-size:31px 31px,73px 73px,100% 100%; background-position:0 0,19px 11px,center; mask-image:radial-gradient(ellipse at center,black 18%,rgba(0,0,0,.86) 68%,transparent 100%); animation:field-glide 100s linear infinite; will-change:transform; }
+.graph-space-field::after { content:""; position:absolute; inset:0; opacity:.52; background:radial-gradient(ellipse at 52% 54%,transparent 30%,rgba(82,229,218,.035) 30.2%,transparent 30.6%,transparent 42%,rgba(82,229,218,.025) 42.2%,transparent 42.5%,transparent 57%,rgba(82,229,218,.02) 57.2%,transparent 57.5%); animation:field-breathe 12s ease-in-out infinite; }
+@keyframes field-glide { 0% { transform:rotate(0deg) scale(1); } 50% { transform:rotate(1.6deg) scale(1.025); } 100% { transform:rotate(0deg) scale(1); } }
+@keyframes field-breathe { 0%,100% { opacity:.28; } 50% { opacity:.68; } }
+.graph-2d-world { z-index:1; }
+.memory-edge { stroke-dasharray:42 110; animation:memory-current 38s linear infinite; }
+.memory-edge.parent-edge { stroke-dasharray:52 108; animation-duration:31s; }
+.memory-edge.selected-edge { stroke-dasharray:48 74; animation-duration:13s; filter:drop-shadow(0 0 3px rgba(117,239,237,.32)); }
+@keyframes memory-current { to { stroke-dashoffset:-304; } }
+.node-radar { animation:node-idle-glow 9s ease-in-out var(--node-delay,0s) infinite; }
+.node-orbit { animation:orbital-turn 42s linear var(--node-delay,0s) infinite; transform-origin:center; }
+.node-orbit-secondary { inset:-8px -3px; border-style:dashed; opacity:.25; transform:rotate(41deg); animation-duration:57s; animation-direction:reverse; }
+.node-sphere { animation:sphere-idle 8.5s ease-in-out var(--node-delay,0s) infinite; }
+@keyframes orbital-turn { to { transform:rotate(332deg); } }
+@keyframes node-idle-glow { 0%,100% { filter:brightness(.86); } 50% { filter:brightness(1.12); } }
+@keyframes sphere-idle { 0%,100% { transform:scale(.94); } 50% { transform:scale(1.06); } }
+.graph-core-node .node-orbit { inset:-9px -28px; border-width:2px; opacity:.78; animation-duration:58s; }
+.graph-core-node .node-orbit-secondary { inset:-40px -13px; border-style:dashed; border-width:1px; opacity:.48; animation-duration:76s; }
+.graph-core-node.node-active .node-radar { animation-duration:9s; }
+.node-label-card { left:calc(50% + var(--label-x,0px)); top:calc(50% + var(--label-y,35px)); transform:var(--label-transform,translateX(-50%)); transition:border-color .25s ease,background .25s ease,box-shadow .25s ease; }
+.graph-node:not(.graph-core-node):hover,.graph-node:not(.graph-core-node).selected { z-index:5; }
+.graph-node:not(.graph-core-node):hover .node-label-card,.graph-node:not(.graph-core-node).selected .node-label-card { border-color:color-mix(in srgb,var(--node-color) 70%,transparent); background:linear-gradient(115deg,rgba(7,24,31,.98),rgba(5,15,22,.94)); box-shadow:0 0 18px color-mix(in srgb,var(--node-color) 17%,transparent),0 7px 24px rgba(0,0,0,.42); }
+.graph-node:focus-visible .node-radar { outline:2px solid rgba(221,255,255,.88); outline-offset:5px; }
+.core-label-card { left:82px; top:50%; transform:translateY(-50%); align-items:flex-start; }
+.core-label-card strong { font-size:25px; }
+.graph-zoom-hint { padding:9px 12px; border:1px solid rgba(99,159,167,.12); border-radius:99px; background:rgba(4,15,19,.42); backdrop-filter:blur(5px); }
+.graph-2d-projecting .graph-space-field { opacity:.48; }
+@media (max-width:900px) {
+  .graph-space-field { inset:-8%; background-size:27px 27px,61px 61px,100% 100%; }
+  .graph-zoom-hint { bottom:calc(46px + env(safe-area-inset-bottom)); }
+}
+@media (max-width:560px) {
+  .graph-space-field { opacity:.62; background-size:24px 24px,57px 57px,100% 100%; }
+  .graph-core-node .node-orbit { inset:-8px -22px; }
+  .graph-core-node .node-orbit-secondary { inset:-31px -11px; }
+  .core-label-card { left:58px; top:50%; min-width:120px; padding:5px 8px; align-items:flex-start; }
+  .core-label-card strong { font-size:18px; }
+  .core-label-card small { font-size:6px; }
+  .node-label-card { max-width:116px; }
+  .node-label-card strong { max-width:94px; font-size:8px; }
+  .graph-zoom-hint { max-width:calc(100vw - 120px); overflow:hidden; white-space:nowrap; font-size:6px; letter-spacing:.04em; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .graph-space-field,.graph-space-field::after,.memory-edge,.node-radar,.node-orbit,.node-sphere { animation:none!important; will-change:auto; }
+}

@@ -98,31 +98,41 @@ export default function MemoryScene2D({
 
     const positions = new Map<string, Point>();
     const branches = new Map<string, number>();
-    if (root) positions.set(root, { x: hologramModel ? -170 : 0, y: 0 });
-    const rootChildren = children.get(root ?? "") ?? [];
-    const rootRadius = Math.max(236, 175 + rootChildren.length * 17);
-    for (const [parentId, childIdsRaw] of children) {
-      const childIds = [...childIdsRaw].sort(compare);
-      const parentPosition = positions.get(parentId) ?? { x: 0, y: 0 };
-      const parentDepth = depth.get(parentId) ?? 0;
-      const parentAngle = branches.get(parentId) ?? -Math.PI / 2;
-      childIds.forEach((id, index) => {
-        const childDepth = depth.get(id) ?? 1;
-        const angle = parentId === root
-          ? -Math.PI / 2 + (index / Math.max(1, childIds.length)) * Math.PI * 2
-          : parentAngle + (index - (childIds.length - 1) / 2) * Math.min(0.48, 1.55 / Math.max(1, childIds.length - 1));
-        const radius = parentId === root
-          ? rootRadius
-          : Math.max(145, 128 + childIds.length * 12) + Math.max(0, childDepth - parentDepth - 1) * 135;
-        positions.set(id, {
-          x: parentPosition.x + Math.cos(angle) * radius,
-          y: parentPosition.y + Math.sin(angle) * radius,
-        });
-        branches.set(id, angle);
+    const viewScale = Math.max(.46, Math.min(1, Math.min(viewport.width / 1000, viewport.height / 760)));
+    const rootChildren = [...(children.get(root ?? "") ?? [])].sort(compare);
+    const rootRadius = Math.min(330, 220 + Math.max(0, rootChildren.length - 4) * 5) * viewScale;
+    const shellGap = Math.min(250, 205 + Math.max(0, rootChildren.length - 5) * 3) * viewScale;
+    const rootOffset = hologramModel ? -170 * viewScale : 0;
+    if (root) positions.set(root, { x: rootOffset, y: 0 });
+
+    // Place each graph depth on an expanding orbit around CISCO. A golden-angle
+    // turn for single-child chains keeps follow-up memories from stacking in a
+    // straight line; sibling groups fan out around their inherited direction.
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+    const pending = root ? [...rootChildren.map((id, index) => ({
+      id,
+      angle: rootChildren.length === 1 ? -Math.PI / 2 : -Math.PI / 2 + ((index + .5) / rootChildren.length) * Math.PI * 2,
+    }))] : [];
+    for (const entry of pending) branches.set(entry.id, entry.angle);
+    let layoutCursor = 0;
+    while (layoutCursor < pending.length) {
+      const { id, angle } = pending[layoutCursor++];
+      const nodeDepth = depth.get(id) ?? 1;
+      const radius = (rootRadius + (nodeDepth - 1) * shellGap);
+      positions.set(id, { x: rootOffset + Math.cos(angle) * radius, y: Math.sin(angle) * radius });
+      const childIds = [...(children.get(id) ?? [])].sort(compare);
+      const childSpread = Math.min(1.48, .5 + Math.max(0, childIds.length - 1) * .24);
+      childIds.forEach((childId, index) => {
+        const childAngle = childIds.length === 1
+          ? angle + goldenAngle
+          : angle + (index - (childIds.length - 1) / 2) * childSpread;
+        branches.set(childId, childAngle);
+        pending.push({ id: childId, angle: childAngle });
       });
     }
-    return { positions, parent, depth };
-  }, [safeNodes, safeEdges, hologramModel]);
+
+    return { positions, parent, depth, branches };
+  }, [safeNodes, safeEdges, hologramModel, viewport]);
 
   useEffect(() => {
     const element = viewportRef.current;
@@ -194,6 +204,7 @@ export default function MemoryScene2D({
       onWheel={handleZoom}
       aria-label="Interactive 2D memory graph"
     >
+      <div className="graph-space-field" aria-hidden="true" />
       <div className="graph-2d-world" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
         <svg className="graph-2d-links" viewBox={`0 0 ${viewport.width} ${viewport.height}`} preserveAspectRatio="none" aria-hidden="true">
           <g transform={`translate(${centerX} ${centerY})`}>
@@ -217,13 +228,24 @@ export default function MemoryScene2D({
             const selectedNode = node.id === selected;
             const isCore = node.kind === "agent";
             const nodeColor = colorByKind[node.kind] ?? colorByKind.memory;
+            const angle = layout.branches.get(node.id) ?? Math.atan2(point.y, point.x);
+            const horizontalLabel = Math.abs(Math.cos(angle)) > .62;
+            const labelOnRight = Math.cos(angle) >= 0;
+            const labelX = isCore ? 0 : horizontalLabel ? (labelOnRight ? 34 : -34) : 0;
+            const labelY = isCore ? 0 : horizontalLabel ? 0 : (Math.sin(angle) >= 0 ? 35 : -35);
+            const labelTransform = isCore
+              ? ""
+              : horizontalLabel
+                ? labelOnRight ? "translate(0,-50%)" : "translate(-100%,-50%)"
+                : Math.sin(angle) >= 0 ? "translate(-50%,0)" : "translate(-50%,-100%)";
+            const delay = -((Array.from(node.id).reduce((sum, char) => sum * 31 + char.charCodeAt(0), 7) >>> 0) % 9000) / 1000;
             const top = `${point.y + offset.y}px`;
             const left = `${point.x + offset.x}px`;
             return (
               <button
                 key={node.id}
                 className={`graph-node kind-${node.kind}${isCore ? " graph-core-node" : ""}${selectedNode ? " selected" : ""}${node.active ? " node-active" : ""}`}
-                style={{ left: `calc(50% + ${left})`, top: `calc(50% + ${top})`, "--node-color": nodeColor } as React.CSSProperties}
+                style={{ left: `calc(50% + ${left})`, top: `calc(50% + ${top})`, "--node-color": nodeColor, "--node-delay": `${delay}s`, "--label-x": `${labelX}px`, "--label-y": `${labelY}px`, "--label-transform": labelTransform } as React.CSSProperties}
                 title={`${node.label}${node.detail ? ` — ${node.detail}` : ""}`}
                 aria-label={`${node.label}, ${node.kind}${selectedNode ? ", focused" : ""}. Drag to rearrange.`}
                 onPointerDown={(event) => beginNodeDrag(event, node.id)}
@@ -237,6 +259,7 @@ export default function MemoryScene2D({
               >
                 <span className={`node-radar${isCore ? " core-radar" : ""}`}>
                   <span className="node-orbit" />
+                  {!isCore && <span className="node-orbit node-orbit-secondary" />}
                   <span className="node-sphere" />
                   {isCore && <><span className="core-ring core-ring-one" /><span className="core-ring core-ring-two" /></>}
                 </span>
