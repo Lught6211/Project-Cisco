@@ -761,3 +761,138 @@ body, html {
 @media (prefers-reduced-motion: reduce) {
   .holo-projection { animation:none !important; }
 }
+
+/* 2D orbital memory field */
+.graph-2d-viewport { position:absolute; inset:0; z-index:1; overflow:hidden; touch-action:none; cursor:grab; user-select:none; }
+.graph-2d-viewport:active { cursor:grabbing; }
+.graph-2d-world { position:absolute; inset:0; transform-origin:50% 50%; will-change:transform; }
+.graph-2d-links { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
+.memory-edge { fill:none; stroke:rgba(91,181,194,.2); stroke-width:1.15; vector-effect:non-scaling-stroke; transition:stroke .35s ease,stroke-width .35s ease,opacity .35s ease; }
+.memory-edge.parent-edge { stroke:rgba(91,205,211,.43); stroke-width:1.6; }
+.memory-edge.selected-edge { stroke:rgba(133,239,242,.78); stroke-width:2; }
+.core-orbit { fill:none; stroke:rgba(110,214,224,.14); stroke-width:1; stroke-dasharray:2 8; vector-effect:non-scaling-stroke; animation:orbit-mark-drift 44s linear infinite; transform-origin:center; }
+@keyframes orbit-mark-drift { to { transform:rotate(360deg); } }
+.graph-2d-node-layer { position:absolute; inset:0; pointer-events:none; }
+.graph-node { position:absolute; z-index:2; display:grid; justify-items:center; width:1px; height:1px; padding:0; overflow:visible; border:0; outline:0; color:var(--node-color); background:transparent; pointer-events:auto; touch-action:none; cursor:grab; }
+.graph-node:active { cursor:grabbing; }
+.node-radar { position:relative; display:grid; place-items:center; width:54px; height:54px; border:1px solid color-mix(in srgb,var(--node-color) 58%,transparent); border-radius:50%; background:radial-gradient(circle at 50% 48%,color-mix(in srgb,var(--node-color) 16%,rgba(5,16,21,.8)),rgba(6,18,24,.32) 63%,transparent 70%); box-shadow:0 0 19px color-mix(in srgb,var(--node-color) 11%,transparent),inset 0 0 16px color-mix(in srgb,var(--node-color) 14%,transparent); transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease; }
+.node-orbit { position:absolute; inset:5px -7px; border:1px solid color-mix(in srgb,var(--node-color) 55%,transparent); border-radius:50%; transform:rotate(-28deg); opacity:.62; }
+.node-sphere { position:relative; display:block; width:15px; height:15px; border:1px solid color-mix(in srgb,var(--node-color) 90%,white); border-radius:50%; background:radial-gradient(circle at 34% 30%,#f3ffff 0,color-mix(in srgb,var(--node-color) 90%,white) 13%,color-mix(in srgb,var(--node-color) 48%,transparent) 46%,rgba(5,14,18,.18) 75%); box-shadow:0 0 12px color-mix(in srgb,var(--node-color) 64%,transparent); }
+.graph-node:not(.graph-core-node) .node-radar { width:50px; height:50px; }
+.graph-node:not(.graph-core-node) .node-sphere { width:18px; height:18px; }
+.graph-node.selected .node-radar,.graph-node:hover .node-radar { transform:scale(1.12); border-color:var(--node-color); box-shadow:0 0 25px color-mix(in srgb,var(--node-color) 34%,transparent),inset 0 0 18px color-mix(in srgb,var(--node-color) 22%,transparent); }
+.graph-node.selected .node-orbit,.graph-node:hover .node-orbit { opacity:1; }
+.graph-core-node .node-radar { width:138px; height:138px; border-width:2px; background:radial-gradient(circle at center,color-mix(in srgb,var(--node-color) 22%,transparent) 0,rgba(5,18,25,.78) 63%,transparent 69%); box-shadow:0 0 45px color-mix(in srgb,var(--node-color) 22%,transparent),inset 0 0 32px color-mix(in srgb,var(--node-color) 16%,transparent); }
+.graph-core-node .node-sphere { width:62px; height:62px; box-shadow:0 0 28px color-mix(in srgb,var(--node-color) 88%,transparent),0 0 76px color-mix(in srgb,var(--node-color) 34%,transparent); }
+.core-ring { position:absolute; inset:-21px; border:1px solid color-mix(in srgb,var(--node-color) 50%,transparent); border-radius:50%; pointer-events:none; }
+.core-ring-one { animation:core-ring-breathe 4.4s ease-in-out infinite; }
+.core-ring-two { inset:-33px; border-style:dashed; opacity:.42; animation:core-ring-breathe 6s ease-in-out -2s infinite; }
+@keyframes core-ring-breathe { 0%,100% { transform:scale(.96); opacity:.35; } 50% { transform:scale(1.05); opacity:.82; } }
+.graph-core-node.node-active .node-radar { animation:core-active 3.6s ease-in-out infinite; }
+@keyframes core-active { 0%,100% { filter:brightness(.93); } 50% { filter:brightness(1.12); } }
+.node-label-card { position:absolute; top:35px; left:50%; display:flex; align-items:center; gap:6px; max-width:164px; padding:5px 8px; transform:translateX(-50%); border:1px solid color-mix(in srgb,var(--node-color) 33%,rgba(65,116,126,.15)); border-radius:2px 8px 2px 8px; background:linear-gradient(115deg,rgba(5,18,24,.93),rgba(4,12,18,.74)); box-shadow:0 4px 18px rgba(0,0,0,.28),inset 0 0 12px color-mix(in srgb,var(--node-color) 7%,transparent); color:#dcebed; white-space:nowrap; pointer-events:none; }
+.node-label-card i { width:5px; height:5px; flex:0 0 auto; border-radius:50%; background:var(--node-color); box-shadow:0 0 7px var(--node-color); }
+.node-label-card strong { max-width:142px; overflow:hidden; text-overflow:ellipsis; font:600 10px/1.2 ui-sans-serif,Arial,sans-serif; letter-spacing:.01em; }
+.core-label-card { top:86px; min-width:152px; justify-content:center; flex-direction:column; gap:3px; padding:7px 12px; background:linear-gradient(90deg,rgba(4,14,20,.78),rgba(5,20,28,.94),rgba(4,14,20,.78)); border-color:color-mix(in srgb,var(--node-color) 39%,transparent); }
+.core-label-card strong { max-width:220px; font:500 23px/1 ui-sans-serif,Arial,sans-serif; letter-spacing:.02em; text-shadow:0 0 15px color-mix(in srgb,var(--node-color) 42%,transparent); }
+.core-label-card small { color:var(--node-color); font:700 7px/1.2 ui-monospace,monospace; letter-spacing:.2em; }
+.graph-zoom-hint { position:absolute; bottom:52px; left:50%; z-index:3; transform:translateX(-50%); color:rgba(139,164,167,.62); font:700 8px/1 ui-monospace,monospace; letter-spacing:.13em; white-space:nowrap; pointer-events:none; }
+.graph-2d-projecting .graph-node-layer { transition:opacity .35s ease; }
+.world-holo-stage { position:absolute; top:50%; left:calc(50% + 10px); z-index:4; width:min(700px,52vw); height:min(590px,76vh); transform:translateY(-50%); touch-action:none; }
+.holo-stage-loading { display:grid; place-items:center; color:#75e9e2; font:700 9px ui-monospace,monospace; letter-spacing:.16em; text-shadow:0 0 12px rgba(82,229,218,.5); }
+.holo-stage-loading { display:grid; place-items:center; color:#75e9e2; font:700 9px ui-monospace,monospace; letter-spacing:.16em; text-shadow:0 0 12px rgba(82,229,218,.5); }
+.world-holo-stage::before { content:""; position:absolute; inset:8% 0 4%; pointer-events:none; background:radial-gradient(ellipse at 52% 56%,rgba(57,225,235,.11),transparent 69%); }
+.world-holo-stage canvas { position:absolute!important; inset:0; width:100%!important; height:100%!important; background:transparent!important; }
+.world-model-title { text-shadow:0 0 12px rgba(82,229,218,.55); }
+
+/* Private homelab operations console */
+.server-dock-button.linked { color:#75f0d1; border-color:rgba(117,240,209,.65); box-shadow:0 0 14px rgba(117,240,209,.18); }
+.server-dock-button.disconnected { color:#ff9d82; border-color:rgba(255,157,130,.62); }
+.homelab-console { position:fixed; z-index:45; top:74px; right:76px; display:flex; flex-direction:column; width:min(430px,calc(100vw - 100px)); max-height:calc(100dvh - 126px); overflow:hidden; border:1px solid rgba(82,229,218,.68); background:linear-gradient(150deg,rgba(5,25,31,.97),rgba(4,13,19,.96)); color:#dff7f5; box-shadow:0 0 38px rgba(31,194,208,.15),inset 0 0 28px rgba(82,229,218,.035); backdrop-filter:blur(12px); animation:holo-arrive .32s cubic-bezier(.2,.8,.2,1) both; }
+.homelab-console::before { content:""; position:absolute; inset:0; z-index:0; pointer-events:none; opacity:.17; background:repeating-linear-gradient(0deg,transparent 0,transparent 3px,rgba(94,228,224,.08) 4px); }
+.homelab-head,.homelab-link-state,.homelab-content,.homelab-connect-form { position:relative; z-index:1; }
+.homelab-head { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:15px 16px 12px; border-bottom:1px solid rgba(82,229,218,.23); background:linear-gradient(90deg,rgba(82,229,218,.09),transparent); }
+.homelab-head h2 { margin-top:5px; font:700 16px/1.2 ui-sans-serif,Arial,sans-serif; letter-spacing:.03em; }
+.homelab-eyebrow { color:#6ce9e3; font:700 8px/1 ui-monospace,monospace; letter-spacing:.15em; }
+.homelab-close { width:26px; height:26px; border:1px solid rgba(119,198,198,.33); background:transparent; color:#aad0d0; font-size:19px; line-height:1; }
+.homelab-link-state { display:flex; align-items:center; gap:8px; padding:10px 16px; border-bottom:1px solid rgba(62,115,121,.18); color:#8da8aa; font:700 8px/1 ui-monospace,monospace; letter-spacing:.1em; }
+.homelab-link-state button { margin-left:auto; padding:5px 7px; border:1px solid rgba(82,229,218,.26); color:#8ce8e1; background:rgba(82,229,218,.045); font:700 7px/1 ui-monospace,monospace; letter-spacing:.07em; }
+.homelab-link-state button+button { margin-left:0; }
+.homelab-status-dot,.homelab-state-mark { display:block; flex:0 0 auto; width:6px; height:6px; border-radius:50%; background:#677b80; }
+.homelab-status-dot.online,.homelab-state-mark.online { background:#52e5be; box-shadow:0 0 9px #52e5be; }
+.homelab-status-dot.offline,.homelab-state-mark.offline { background:#ff6c75; box-shadow:0 0 9px rgba(255,76,96,.65); }
+.homelab-connect-form { display:grid; gap:13px; overflow:auto; padding:16px; }
+.homelab-connect-form p { color:#92a8ab; font:11px/1.55 ui-sans-serif,Arial,sans-serif; }
+.homelab-connect-form label { display:grid; gap:6px; color:#70d8d7; font:700 8px/1 ui-monospace,monospace; letter-spacing:.1em; }
+.homelab-connect-form input { width:100%; min-width:0; padding:10px; border:1px solid rgba(82,229,218,.27); border-radius:2px; outline:0; background:rgba(1,8,12,.74); color:#e2f8f5; font:10px ui-monospace,monospace; }
+.homelab-connect-form input:focus { border-color:#52e5da; box-shadow:0 0 12px rgba(82,229,218,.12); }
+.token-input-row { display:flex; gap:7px; }
+.token-input-row button { flex:0 0 auto; padding:0 9px; border:1px solid rgba(82,229,218,.45); color:#72e8df; background:rgba(82,229,218,.08); font:700 8px ui-monospace,monospace; }
+.homelab-connect-form small { color:#6c898c; font:9px/1.45 ui-sans-serif,Arial,sans-serif; }
+.homelab-connect-button { padding:11px; border:1px solid #50dcd7; background:rgba(60,210,205,.11); color:#82f0e9; font:700 9px ui-monospace,monospace; letter-spacing:.11em; }
+.homelab-connect-button:disabled { opacity:.55; cursor:wait; }
+.homelab-content { overflow:auto; padding:12px 14px 10px; }
+.homelab-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+.homelab-metric { display:grid; grid-template-columns:1fr auto; gap:7px; padding:9px 10px 8px; border:1px solid rgba(82,229,218,.16); background:rgba(5,17,22,.5); }
+.homelab-metric span { color:#729093; font:700 7px ui-monospace,monospace; letter-spacing:.1em; }
+.homelab-metric strong { color:#e4fbf6; font:700 11px ui-monospace,monospace; }
+.homelab-metric>i { grid-column:1/-1; display:block; height:2px; background:rgba(82,229,218,.12); }
+.homelab-metric>i b { display:block; height:100%; background:linear-gradient(90deg,#29bfc0,#a1fff1); box-shadow:0 0 6px #52e5da; }
+.homelab-section { margin-top:14px; }
+.homelab-section>header { display:flex; justify-content:space-between; align-items:center; padding-bottom:7px; border-bottom:1px solid rgba(82,229,218,.2); }
+.homelab-section h3 { color:#67d9d8; font:700 8px ui-monospace,monospace; letter-spacing:.13em; }
+.homelab-section>header span { color:#597779; font:7px ui-monospace,monospace; letter-spacing:.08em; }
+.homelab-row { display:flex; align-items:center; gap:9px; min-height:38px; padding:6px 1px; border-bottom:1px solid rgba(74,114,118,.14); }
+.homelab-row-copy { display:grid; gap:3px; min-width:0; flex:1; }
+.homelab-row-copy strong { overflow:hidden; color:#d7eeee; font:600 10px ui-sans-serif,Arial,sans-serif; text-overflow:ellipsis; white-space:nowrap; }
+.homelab-row-copy small { overflow:hidden; color:#728b8e; font:8px ui-monospace,monospace; text-overflow:ellipsis; white-space:nowrap; }
+.homelab-row>button,.homelab-download-bottom button { padding:5px 7px; border:1px solid rgba(82,229,218,.3); background:rgba(82,229,218,.05); color:#73e5dd; font:700 7px ui-monospace,monospace; letter-spacing:.08em; }
+.homelab-service-actions { display:flex; gap:4px; flex:0 0 auto; }
+.homelab-service-actions button { padding:5px 6px; border:1px solid rgba(82,229,218,.3); background:rgba(82,229,218,.05); color:#73e5dd; font:700 7px ui-monospace,monospace; letter-spacing:.06em; }
+.homelab-status-word { font:700 7px ui-monospace,monospace; letter-spacing:.08em; }
+.homelab-status-word.online { color:#83edc4; }
+.homelab-status-word.degraded,.homelab-status-word.offline { color:#ff9985; }
+.homelab-muted { padding:9px 1px 2px; color:#708b8e; font:9px/1.5 ui-sans-serif,Arial,sans-serif; }
+.homelab-download { padding:8px 1px; border-bottom:1px solid rgba(74,114,118,.14); }
+.homelab-download-top,.homelab-download-bottom { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.homelab-download-top strong { overflow:hidden; color:#d8eeed; font:600 9px ui-sans-serif,Arial,sans-serif; text-overflow:ellipsis; white-space:nowrap; }
+.homelab-download-top span { color:#7ee6d8; font:8px ui-monospace,monospace; }
+.download-progress { height:2px; margin:7px 0 5px; background:rgba(95,145,148,.15); }
+.download-progress i { display:block; height:100%; background:#69ddd0; box-shadow:0 0 7px rgba(82,229,218,.65); }
+.homelab-download-bottom small { overflow:hidden; color:#779195; font:8px ui-monospace,monospace; text-overflow:ellipsis; white-space:nowrap; }
+.homelab-foot { padding-top:10px; color:#536d71; font:7px ui-monospace,monospace; letter-spacing:.1em; }
+.homelab-error { padding:8px 9px; border:1px solid rgba(255,105,108,.38); color:#ffb2a2; background:rgba(82,17,25,.24); font:9px/1.45 ui-monospace,monospace; }
+
+.corruption-active .graph-node { filter:color-mix(in srgb,white calc(100% - var(--ultron-corruption,0%)),#ff3f59 var(--ultron-corruption,0%)); }
+.ultron-glitch-active .graph-node:not(.graph-core-node) { animation:spiderverse-signal 4.7s linear infinite; }
+.ultron-glitch-active .memory-edge { stroke:color-mix(in srgb,rgba(91,181,194,.55) calc(100% - var(--ultron-corruption,0%)),rgba(255,38,63,.82) var(--ultron-corruption,0%)); }
+.ultron-glitch-active .core-label-card strong { color:#ff5066; }
+.ultron-glitch-active .homelab-console { border-color:color-mix(in srgb,#52e5da calc(100% - var(--ultron-corruption,0%)),#ff263f var(--ultron-corruption,0%)); }
+.corruption-active .homelab-section h3,.corruption-active .homelab-eyebrow { color:color-mix(in srgb,#67d9d8 calc(100% - var(--ultron-corruption,0%)),#ff5367 var(--ultron-corruption,0%)); }
+
+@media (max-width:900px) {
+  .homelab-console { top:68px; right:64px; width:min(420px,calc(100vw - 82px)); max-height:calc(100dvh - 116px); }
+  .world-holo-stage { left:calc(50% + 8px); width:min(620px,55vw); height:min(560px,70vh); }
+  .graph-zoom-hint { bottom:47px; font-size:7px; }
+}
+@media (max-width:560px) {
+  .graph-core-node .node-radar { width:108px; height:108px; }
+  .graph-core-node .node-sphere { width:50px; height:50px; }
+  .core-ring { inset:-15px; }
+  .core-ring-two { inset:-25px; }
+  .core-label-card { top:68px; min-width:120px; }
+  .core-label-card strong { font-size:19px; }
+  .node-radar,.graph-node:not(.graph-core-node) .node-radar { width:42px; height:42px; }
+  .node-label-card { top:29px; max-width:132px; padding:4px 6px; }
+  .node-label-card strong { max-width:109px; font-size:9px; }
+  .graph-zoom-hint { bottom:43px; max-width:76vw; overflow:hidden; font-size:6px; letter-spacing:.07em; }
+  .world-holo-stage { top:auto; left:30%; right:52px; bottom:62px; width:auto; height:min(44vh,370px); transform:none; }
+  .homelab-console { top:auto; right:48px; bottom:55px; width:calc(100vw - 62px); max-height:72dvh; }
+  .homelab-head { padding:12px; }
+  .homelab-content { padding:10px; }
+  .homelab-connect-form { padding:12px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .core-orbit,.core-ring,.graph-core-node.node-active .node-radar { animation:none!important; }
+  .homelab-console { animation:none!important; }
+}

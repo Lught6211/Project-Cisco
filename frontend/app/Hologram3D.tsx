@@ -101,12 +101,12 @@ function SubjectModel({ archetype, title }: Props) {
   }
 }
 
-export function WorldHologram({ title, archetype, onDismiss }: Props & { onDismiss: () => void }) {
+export function WorldHologram({ title, archetype, onDismiss, position, scale }: Props & { onDismiss: () => void; position?: [number, number, number]; scale?: number }) {
   const [parts, setParts] = useState({ hood: false, trunk: false, doors: false, engine: false });
   const mobile = typeof window !== "undefined" && window.innerWidth < 600;
   const toggle = (part: keyof typeof parts) => setParts((current) => ({ ...current, [part]: !current[part] }));
   const toggleEngine = () => setParts((current) => ({ ...current, hood: current.engine ? current.hood : true, engine: !current.engine }));
-  return <group position={[mobile ? 3.15 : 4.35, 0, 0]} scale={mobile ? 0.6 : 0.82}>
+  return <group position={position ?? [mobile ? 3.15 : 4.35, 0, 0]} scale={scale ?? (mobile ? 0.6 : 0.82)}>
     <Html position={[0, 2.12, 0]} center distanceFactor={10}>
       <div className="world-model-title"><i /> 3D PROJECTION / {title.toUpperCase()}</div>
     </Html>

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import "./scene.css";
+import { HomelabConsole, useHomelab } from "./homelab";
 
-const MemoryScene = dynamic(() => import("./MemoryScene"), { ssr: false });
+const MemoryScene = dynamic(() => import("./MemoryScene2D"), { ssr: false });
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || "https://cisco-backend-yve2.onrender.com").replace(/\/+$/, "");
 
@@ -52,6 +53,8 @@ function hologramArchetype(subject: string) {
 }
 
 export default function Home() {
+  const homelab = useHomelab();
+  const [serverPanelOpen, setServerPanelOpen] = useState(false);
   const [nodes, setNodes] = useState<Node[]>([
     { id: "cisco", label: "CISCO", kind: "agent", detail: "Autonomous voice agent core runtime", x: 50, y: 48, active: true },
     { id: "maya", label: "Maya Chen", kind: "person", detail: "Primary operator identity profile", x: 20, y: 27 },
@@ -205,7 +208,55 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  const selectedNode = nodes.find((n) => n.id === selectedId) || nodes[0];
+  const operationalNodes = useMemo<Node[]>(() => {
+    if (homelab.linkState === "unconfigured" || homelab.linkState === "loading") return [];
+    const snapshot = homelab.snapshot;
+    const linkNode: Node = {
+      id: "cisco-homelab-server",
+      x: 0,
+      y: 0,
+      label: snapshot?.server.label ?? "Homelab server",
+      kind: "server",
+      detail: homelab.linkState === "online" ? "Private server link is online" : "Server or private Tailscale link is offline",
+      active: homelab.linkState === "online",
+    };
+    const serviceNodes = (snapshot?.services ?? []).map((service): Node => ({
+      id: `cisco-service-${service.id}`,
+      x: 0,
+      y: 0,
+      label: service.label,
+      kind: "service",
+      detail: `${service.state.toUpperCase()} · ${service.status}${service.controls_allowed ? " · controls enabled" : " · monitoring only"}`,
+      active: service.state === "running",
+    }));
+    const siteNodes = (snapshot?.sites ?? []).map((site): Node => ({
+      id: `cisco-site-${site.id}`,
+      x: 0,
+      y: 0,
+      label: site.name,
+      kind: "site",
+      detail: `${site.status.toUpperCase()} · ${site.http_status ? `HTTP ${site.http_status}` : "no response"}`,
+      active: site.status === "online",
+    }));
+    const downloadNodes = (snapshot?.downloads.items ?? []).slice(0, 12).map((download): Node => ({
+      id: `cisco-download-${download.hash}`,
+      x: 0,
+      y: 0,
+      label: download.name,
+      kind: "download",
+      detail: `${download.progress}% · ${download.state}`,
+      active: !download.paused,
+    }));
+    return [linkNode, ...serviceNodes, ...siteNodes, ...downloadNodes];
+  }, [homelab.linkState, homelab.snapshot]);
+  const operationalEdges = useMemo<Edge[]>(() => operationalNodes.map((node) => ({
+    source: node.kind === "server" ? "cisco" : "cisco-homelab-server",
+    target: node.id,
+    label: node.kind,
+  })), [operationalNodes]);
+  const sceneNodes = useMemo(() => [...nodes, ...operationalNodes], [nodes, operationalNodes]);
+  const sceneEdges = useMemo(() => [...edges, ...operationalEdges], [edges, operationalEdges]);
+  const selectedNode = sceneNodes.find((n) => n.id === selectedId) || sceneNodes[0];
   const hologramNode = hologram ? nodes.find((node) => node.id === hologram.nodeId) || selectedNode : selectedNode;
   const hologramNeighbors = hologram && hologram.projection === "memory"
     ? edges.flatMap((edge) => edge.source === hologram.nodeId
@@ -229,8 +280,8 @@ export default function Home() {
     .slice(0, 8);
   const outgoing = new Map<string, string[]>();
   const incoming = new Map<string, Set<string>>();
-  const nodeKinds = new Map(nodes.map((node) => [node.id, node.kind]));
-  edges.forEach((edge) => {
+  const nodeKinds = new Map(sceneNodes.map((node) => [node.id, node.kind]));
+  sceneEdges.forEach((edge) => {
     outgoing.set(edge.source, [...(outgoing.get(edge.source) || []), edge.target]);
     if (!incoming.has(edge.target)) incoming.set(edge.target, new Set());
     incoming.get(edge.target)?.add(edge.source);
@@ -507,6 +558,77 @@ export default function Home() {
       speakReply(replyText);
       return;
     }
+    const homelabIntent = !ultronMode
+      && /\b(server|homelab|jellyfin|caddy|qbittorrent|qbit|downloads?|downloading|websites?|sites?|containers?)\b/i.test(prompt)
+      && /\b(check|status|health|online|offline|down|up|restart|reboot|start|stop|pause|resume|progress|speed|cpu|memory|disk|download|website|site|service|container|what|how|is|are|running|reachable|working|show|list)\b/i.test(prompt);
+    if (homelabIntent) {
+      setIsSending(true);
+      setVoiceState("thinking");
+      try {
+        let report = "";
+        const requestedServiceAction = prompt.match(/\b(start|stop|restart|reboot)\b/i)?.[1]?.toLowerCase();
+        const serviceAction = requestedServiceAction === "reboot" ? "restart" : requestedServiceAction as "start" | "stop" | "restart" | undefined;
+        const downloadAction = prompt.match(/\b(pause|resume)\b/i)?.[1]?.toLowerCase() as "pause" | "resume" | undefined;
+
+        if (serviceAction) {
+          const snapshot = await homelab.refresh();
+          const service = snapshot?.services.find((item) =>
+            item.controls_allowed && prompt.toLowerCase().includes(item.label.toLowerCase())
+          );
+          if (!service?.managed_id) {
+            const allowed = snapshot?.services.filter((item) => item.controls_allowed).map((item) => item.label).join(", ");
+            report = allowed
+              ? "I can start, stop, or restart these configured containers: " + allowed + ". Say which one you want. I won't reboot the whole host from chat."
+              : "No container controls are configured on this server yet.";
+          } else if (window.confirm((serviceAction === "restart" ? "Restart " : serviceAction === "stop" ? "Stop " : "Start ") + service.label + "?")) {
+            await homelab.controlService(service.managed_id, serviceAction);
+            report = service.label + " has been " + (serviceAction === "restart" ? "restarted" : serviceAction === "stop" ? "stopped" : "started") + " through the approved server control. The host itself was not rebooted.";
+          } else {
+            report = serviceAction[0].toUpperCase() + serviceAction.slice(1) + " cancelled. " + service.label + " was left unchanged.";
+          }
+        } else if (downloadAction) {
+          const snapshot = await homelab.refresh();
+          const downloads = snapshot?.downloads.items ?? [];
+          const named = downloads.filter((item) => prompt.toLowerCase().includes(item.name.toLowerCase()));
+          const candidates = named.length ? named : downloads.filter((item) => downloadAction === "pause" ? !item.paused : item.paused);
+          if (candidates.length !== 1 || !candidates[0]) {
+            report = candidates.length
+              ? "I found " + candidates.length + " matching downloads. Open the Homelab panel and choose the exact item there."
+              : "I couldn't find a matching download in qBittorrent. Check the Homelab panel to see whether it is connected.";
+          } else {
+            await homelab.controlDownload(candidates[0].hash, downloadAction);
+            report = (downloadAction === "pause" ? "Paused " : "Resumed ") + candidates[0].name + ".";
+          }
+        } else {
+          const snapshot = await homelab.refresh();
+          if (!snapshot) throw new Error("No server status was returned.");
+          const running = snapshot.services.filter((item) => item.state === "running").length;
+          const siteSummary = snapshot.sites.length
+            ? snapshot.sites.map((site) => site.name + ": " + site.status).join("; ")
+            : "No websites configured for monitoring";
+          const activeDownloads = snapshot.downloads.items.filter((item) => !item.paused).length;
+          report = snapshot.server.label + " is reachable. CPU " + snapshot.server.cpu_percent + "%, memory " + snapshot.server.memory.percent + "%, filesystem " + snapshot.server.filesystem.percent + "%, uptime " + Math.floor(snapshot.server.uptime_seconds / 3600) + " hours. " + running + " of " + snapshot.services.length + " containers are running. " + siteSummary + ". " + (snapshot.downloads.configured ? activeDownloads + " active downloads." : "qBittorrent is not connected.");
+        }
+
+        const replyTime = new Date().toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        const reply: CaptionItem = { id: "cap-" + Date.now() + "-server", sender: "CISCO", text: report, time: replyTime };
+        setCaptions((previous) => [...previous, reply]);
+        setChatMessages((previous) => [...previous, reply]);
+        conversationsByTopicRef.current.set(historyKey, [...recentHistory, { role: "user" as const, content: prompt }, { role: "assistant" as const, content: report }].slice(-12));
+        setEvents((previous) => [{ id: "evt-" + Date.now() + "-server", type: "system", title: serviceAction ? "Approved container " + serviceAction : downloadAction ? "Download " + downloadAction : "Homelab status refreshed", detail: report, timestamp: "just now" }, ...previous]);
+        speakReply(report);
+      } catch (cause) {
+        const detail = cause instanceof Error ? cause.message : "Private server link is not available.";
+        const replyTime = new Date().toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        const reply: CaptionItem = { id: "cap-" + Date.now() + "-server-error", sender: "CISCO", text: "I couldn't reach the homelab: " + detail + " Open the Homelab panel to connect over Tailscale.", time: replyTime };
+        setCaptions((previous) => [...previous, reply]);
+        setChatMessages((previous) => [...previous, reply]);
+        setVoiceState("idle");
+      } finally {
+        setIsSending(false);
+      }
+      return;
+    }
     setIsSending(true);
     setVoiceState("thinking");
 
@@ -582,16 +704,13 @@ export default function Home() {
 
   return (
     <div className={`cisco-container${ultronMode ? " ultron-mode" : ""}${corruption > 0.005 ? " corruption-active" : ""}${corruption > 0.18 ? " ultron-glitch-active" : ""}`} style={{ "--ultron-corruption": `${corruption * 100}%` } as CSSProperties & { "--ultron-corruption": string }}>
-      {/* 3D Spatial Background */}
+      {/* Interactive 2D memory field, with a 3D Canvas reserved for holograms. */}
       <div className="canvas-layer">
         <MemoryScene
-          nodes={nodes}
-          edges={edges}
+          nodes={sceneNodes}
+          edges={sceneEdges}
           selected={selectedId}
-          voiceState={voiceState}
-          speechLevel={speechLevel}
-          corruption={corruption}
-          hologramMode={Boolean(hologram)}
+          coreName={identityOverridden ? "ULTRON" : "CISCO"}
           hologramModel={hologram?.projection === "model" ? { title: hologram.title, archetype: hologram.archetype } : null}
           cameraResetToken={cameraResetToken}
           onHologramDismiss={() => setHologram(null)}
@@ -639,8 +758,8 @@ export default function Home() {
 
       {/* Subheader Overlay */}
       <div className="subheader-overlay">
-        <div className="eyebrow">// LIVE MEMORY GRAPH / SPATIAL CORE</div>
-        <h2 className="section-title">Context topology / 3D</h2>
+        <div className="eyebrow">// CISCO OPERATIONS FIELD</div>
+        <h2 className="section-title">Memory & homelab / 2D</h2>
       </div>
 
       <div className="orbital-badge">⊙ ORBITAL</div>
@@ -797,6 +916,18 @@ export default function Home() {
         </button>
 
         <button
+          title={homelab.linkState === "online" ? "Homelab server connected" : homelab.linkState === "offline" ? "Homelab server offline" : "Connect CISCO to your homelab"}
+          aria-label="Open homelab server controls"
+          onClick={() => setServerPanelOpen((open) => !open)}
+          className={"server-dock-button" + (homelab.linkState === "online" ? " linked" : homelab.linkState === "offline" ? " disconnected" : "") + (serverPanelOpen ? " active" : "")}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <rect x="3" y="4" width="18" height="6" rx="1.5" />
+            <rect x="3" y="14" width="18" height="6" rx="1.5" />
+            <path d="M7 7h.01M7 17h.01M11 7h6M11 17h6" />
+          </svg>
+        </button>
+        <button
           title="Voice Channel"
           onClick={toggleMic}
           className={voiceState === "listening" ? "active-mic" : ""}
@@ -828,6 +959,8 @@ export default function Home() {
           </svg>
         </button>
       </div>
+
+      <HomelabConsole open={serverPanelOpen} onClose={() => setServerPanelOpen(false)} controller={homelab} />
 
       {hologram && hologram.projection !== "model" && (
         <aside className="holo-projection" role="dialog" aria-label={`Interactive hologram: ${hologram.title}`}>
@@ -942,7 +1075,7 @@ export default function Home() {
           <span className="legend-item"><span className="dot cyan" /> ACTIVE CONTEXT</span>
           <span className="legend-item"><span className="dot gray" /> LONG-TERM MEMORY</span>
         </div>
-        <div className="hint">DRAG TO ORBIT ↗ SCROLL TO ZOOM</div>
+        <div className="hint">DRAG TO PAN ↗ SCROLL TO ZOOM · DRAG NODES TO ARRANGE</div>
         <button className={`voice-pill voice-${voiceState}`} onClick={toggleMic}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
