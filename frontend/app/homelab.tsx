@@ -58,12 +58,12 @@ export function useHomelab(): Controller {
   }, []);
 
   const request = useCallback(async <T,>(path: string, init?: RequestInit): Promise<T> => {
-    if (!connection.url || !connection.token) throw new Error("Connect to your private homelab server first.");
+    if (!connection.url) throw new Error("Connect to your private homelab server first.");
     const response = await fetch(`${connection.url}${path}`, {
       ...init,
       cache: "no-store",
       headers: {
-        Authorization: `Bearer ${connection.token}`,
+        ...(connection.token ? { Authorization: `Bearer ${connection.token}` } : {}),
         ...(init?.body ? { "Content-Type": "application/json" } : {}),
         ...init?.headers,
       },
@@ -75,7 +75,7 @@ export function useHomelab(): Controller {
   }, [connection]);
 
   const refresh = useCallback(async () => {
-    if (!connection.url || !connection.token) {
+    if (!connection.url) {
       setLinkState("unconfigured");
       return null;
     }
@@ -117,13 +117,13 @@ export function useHomelab(): Controller {
     if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search || parsed.hash || parsed.pathname !== "/") {
       throw new Error("Use the device's HTTPS base address only; it must not include a path or credentials.");
     }
-    if (token.trim().length < 32) throw new Error("The CISCO server token must be at least 32 characters.");
+    if (token.trim() && token.trim().length < 32) throw new Error("If used, the CISCO server token must be at least 32 characters.");
     const next = { url: candidate, token: token.trim() };
     setLinkState("loading");
     setError("");
     try {
       const response = await fetch(`${candidate}/api/cisco/overview`, {
-        headers: { Authorization: `Bearer ${next.token}` },
+        headers: next.token ? { Authorization: `Bearer ${next.token}` } : {},
         cache: "no-store",
         signal: AbortSignal.timeout(9000),
       });
@@ -237,12 +237,12 @@ export function HomelabConsole({ open, onClose, controller }: { open: boolean; o
 
       {!connected && (
         <form className="homelab-connect-form" onSubmit={submit}>
-          <p>Open your tailnet on this device. Paste the private HTTPS address and token from the Portainer setup.</p>
-          <label>TAILSCALE HTTPS ADDRESS<input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://cisco-homelab.your-tailnet.ts.net" autoComplete="url" /></label>
-          <label>SERVER ACCESS TOKEN<div className="token-input-row"><input value={token} onChange={(event) => { setToken(event.target.value); setCopied(false); }} placeholder="32+ character token" type={showToken ? "text" : "password"} autoComplete="off" /><button type="button" onClick={() => { setToken(makeServerToken()); setCopied(false); }}>GENERATE</button><button type="button" onClick={() => setShowToken((visible) => !visible)}>{showToken ? "HIDE" : "SHOW"}</button><button type="button" disabled={!token} onClick={() => { void copyToken(); }}>{copied ? "COPIED" : "COPY"}</button></div></label>
+          <p>Connect this device to Tailscale, then enter the server's private HTTPS address. A token is optional when the server trusts your Tailscale sign-in.</p>
+          <label>TAILSCALE HTTPS ADDRESS<input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://your-server.your-tailnet.ts.net" autoComplete="url" /></label>
+          <label>SERVER ACCESS TOKEN · OPTIONAL<div className="token-input-row"><input value={token} onChange={(event) => { setToken(event.target.value); setCopied(false); }} placeholder="Leave blank for Tailscale sign-in" type={showToken ? "text" : "password"} autoComplete="off" /><button type="button" onClick={() => { setToken(makeServerToken()); setCopied(false); }}>GENERATE</button><button type="button" onClick={() => setShowToken((visible) => !visible)}>{showToken ? "HIDE" : "SHOW"}</button><button type="button" disabled={!token} onClick={() => { void copyToken(); }}>{copied ? "COPIED" : "COPY"}</button></div></label>
           <button className="homelab-connect-button" disabled={saving || !controller.ready}>{saving ? "VERIFYING PRIVATE LINK…" : "CONNECT TO SERVER"}</button>
-          <small>The token stays in this browser session and is sent directly to your server over Tailscale HTTPS.</small>
-          <small>Generate it once, copy it into Portainer's CISCO_API_TOKEN field, redeploy the agent, then use the same token here.</small>
+          <small>When a token is used, it stays in this browser session and is sent directly to your server over Tailscale HTTPS.</small>
+          <small>For token mode, configure the same 32+ character token in the server's private environment settings. Tailscale identity mode needs no browser token.</small>
           {(formError || controller.error) && <div className="homelab-error" role="alert">{formError || controller.error}</div>}
         </form>
       )}
