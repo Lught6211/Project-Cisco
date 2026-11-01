@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 const STORAGE_KEY = "cisco.homelab.connection.v1";
+const DEFAULT_SERVER_URL = "https://ubuntu-homelab.tail5d99d8.ts.net";
 
 export type HomelabConnection = { url: string; token: string };
 export type HomelabService = { id: string; name: string; label: string; state: string; status: string; controls_allowed: boolean; managed_id: string | null };
@@ -38,7 +39,7 @@ export function makeServerToken() {
 }
 
 export function useHomelab(): Controller {
-  const [connection, setConnection] = useState<HomelabConnection>({ url: "", token: "" });
+  const [connection, setConnection] = useState<HomelabConnection>({ url: DEFAULT_SERVER_URL, token: "" });
   const [snapshot, setSnapshot] = useState<HomelabSnapshot | null>(null);
   const [linkState, setLinkState] = useState<HomelabLinkState>("loading");
   const [error, setError] = useState("");
@@ -50,6 +51,8 @@ export function useHomelab(): Controller {
       if (saved) {
         const value = JSON.parse(saved) as HomelabConnection;
         if (typeof value.url === "string" && typeof value.token === "string") setConnection(value);
+      } else {
+        setConnection({ url: DEFAULT_SERVER_URL, token: "" });
       }
     } catch {
       sessionStorage.removeItem(STORAGE_KEY);
@@ -95,7 +98,7 @@ export function useHomelab(): Controller {
 
   useEffect(() => {
     if (!ready) return;
-    if (!connection.url || !connection.token) {
+    if (!connection.url) {
       setLinkState("unconfigured");
       return;
     }
@@ -104,7 +107,7 @@ export function useHomelab(): Controller {
     void run();
     const timer = window.setInterval(() => { if (active) void run(); }, 15000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [ready, connection, refresh]);
+  }, [ready, connection.url, refresh]);
 
   const connect = useCallback(async (rawUrl: string, token: string) => {
     const candidate = rawUrl.trim().replace(/\/+$/, "");
