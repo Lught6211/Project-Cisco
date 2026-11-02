@@ -19,7 +19,7 @@ type MemoryEdge = { source: string; target: string; label?: string };
 type Point = { x: number; y: number };
 
 const colorByKind: Record<string, string> = {
-  agent: "#75d7ff",
+  agent: "#ff69b4",
   person: "#e4d77c",
   place: "#c4a6ff",
   task: "#ffc47a",
@@ -273,7 +273,7 @@ export default function MemoryScene2D({
                   <span className="node-orbit" />
                   {!isCore && <span className="node-orbit node-orbit-secondary" />}
                   <span className="node-sphere" />
-                  {isCore && <><span className="core-ring core-ring-one" /><span className="core-ring core-ring-two" /><span className="core-ring core-ring-three" /></>}
+                  {isCore && <><span className="core-ring core-ring-one" /><span className="core-ring core-ring-two" /><span className="core-ring core-ring-three" /><span className="core-ring core-ring-four" /></>}
                 </span>
                 <span className={`node-label-card${isCore ? " core-label-card" : ""}`}>
                   {!isCore && <i />}
