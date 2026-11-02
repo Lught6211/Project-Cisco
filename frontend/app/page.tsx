@@ -615,9 +615,12 @@ export default function Home() {
       speakReply(replyText);
       return;
     }
-    const homelabIntent = !ultronMode
+    const agentUpdateIntent = !ultronMode
+      && (/\b(cisco|agent|homelab|server)\b/i.test(prompt) && /\b(update|updates|deploy|deployment|upgrade|release|version|latest)\b/i.test(prompt)
+        || /\b(check|look for|find)\b.*\bupdates?\b/i.test(prompt));
+    const homelabIntent = agentUpdateIntent || (!ultronMode
       && /\b(server|homelab|jellyfin|caddy|qbittorrent|qbit|downloads?|downloading|websites?|sites?|containers?)\b/i.test(prompt)
-      && /\b(check|status|health|online|offline|down|up|restart|reboot|start|stop|pause|resume|progress|speed|cpu|memory|disk|download|website|site|service|container|what|how|is|are|running|reachable|working|show|list)\b/i.test(prompt);
+      && /\b(check|status|health|online|offline|down|up|restart|reboot|start|stop|pause|resume|progress|speed|cpu|memory|disk|download|website|site|service|container|what|how|is|are|running|reachable|working|show|list)\b/i.test(prompt));
     if (homelabIntent) {
       setIsSending(true);
       setVoiceState("thinking");
@@ -627,7 +630,26 @@ export default function Home() {
         const serviceAction = requestedServiceAction === "reboot" ? "restart" : requestedServiceAction as "start" | "stop" | "restart" | undefined;
         const downloadAction = prompt.match(/\b(pause|resume)\b/i)?.[1]?.toLowerCase() as "pause" | "resume" | undefined;
 
-        if (serviceAction) {
+        if (agentUpdateIntent) {
+          const update = await homelab.checkDeploy(true);
+          const isChecking = /\b(check|status|available|any|whether|is there|are there|latest version)\b/i.test(prompt);
+          const wantsDeploy = /\b(deploy|install|apply)\b/i.test(prompt) || (!isChecking && /\b(update|upgrade)\b/i.test(prompt));
+          if (!wantsDeploy) {
+            report = update.update_available
+              ? `A CISCO server agent update is available (${update.current_sha.slice(0, 7)} → ${update.latest_sha.slice(0, 7)}). Say “deploy the CISCO agent update” and I will ask before starting it.`
+              : `The CISCO server agent is current at ${update.current_sha.slice(0, 7)}.`;
+            if (update.blocked_reason) report += ` Deployment is blocked: ${update.blocked_reason}`;
+          } else if (!update.update_available) {
+            report = "The CISCO server agent is already on the latest approved main commit.";
+          } else if (!update.deploy_allowed) {
+            report = "I found an update, but deployment is blocked: " + (update.blocked_reason || "the server checkout is not safe to update.");
+          } else if (window.confirm(`Deploy CISCO server agent update ${update.latest_sha.slice(0, 7)}? Monitoring may briefly reconnect. This updates only the CISCO agent and Docker guard.`)) {
+            await homelab.deployAgent();
+            report = `Deployment of CISCO server agent update ${update.latest_sha.slice(0, 7)} has started. The server panel will show progress and reconnect when the agent restarts.`;
+          } else {
+            report = "Deployment cancelled. The server was left unchanged.";
+          }
+        } else if (serviceAction) {
           const snapshot = await homelab.refresh();
           const service = snapshot?.services.find((item) =>
             item.controls_allowed && prompt.toLowerCase().includes(item.label.toLowerCase())
@@ -672,7 +694,7 @@ export default function Home() {
         setCaptions((previous) => [...previous, reply]);
         setChatMessages((previous) => [...previous, reply]);
         conversationsByTopicRef.current.set(historyKey, [...recentHistory, { role: "user" as const, content: prompt }, { role: "assistant" as const, content: report }].slice(-12));
-        setEvents((previous) => [{ id: "evt-" + Date.now() + "-server", type: "system", title: serviceAction ? "Approved container " + serviceAction : downloadAction ? "Download " + downloadAction : "Homelab status refreshed", detail: report, timestamp: "just now" }, ...previous]);
+        setEvents((previous) => [{ id: "evt-" + Date.now() + "-server", type: "system", title: agentUpdateIntent ? "CISCO agent update checked" : serviceAction ? "Approved container " + serviceAction : downloadAction ? "Download " + downloadAction : "Homelab status refreshed", detail: report, timestamp: "just now" }, ...previous]);
         speakReply(report);
       } catch (cause) {
         const detail = cause instanceof Error ? cause.message : "Private server link is not available.";

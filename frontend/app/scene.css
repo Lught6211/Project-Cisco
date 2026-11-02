@@ -842,6 +842,19 @@ body, html {
 .homelab-section>header { display:flex; justify-content:space-between; align-items:center; padding-bottom:7px; border-bottom:1px solid rgba(82,229,218,.2); }
 .homelab-section h3 { color:#67d9d8; font:700 8px ui-monospace,monospace; letter-spacing:.13em; }
 .homelab-section>header span { color:#597779; font:7px ui-monospace,monospace; letter-spacing:.08em; }
+.homelab-deploy-copy { display:grid; gap:7px; padding:9px 1px 2px; }
+.homelab-deploy-copy>strong { color:#dff7f5; font:700 9px ui-monospace,monospace; letter-spacing:.07em; }
+.homelab-deploy-copy>small { color:#718e91; font:8px/1.5 ui-monospace,monospace; overflow-wrap:anywhere; }
+.homelab-deploy-copy .homelab-deploy-warning { color:#ffb28c; }
+.homelab-deploy-steps { display:grid; gap:4px; padding:7px 8px; border-left:1px solid rgba(82,229,218,.28); background:rgba(82,229,218,.025); }
+.homelab-deploy-steps span { color:#829b9d; font:8px/1.35 ui-monospace,monospace; }
+.homelab-deploy-steps span[data-state="complete"] { color:#75e4c4; }
+.homelab-deploy-steps span[data-state="running"] { color:#71e7ef; }
+.homelab-deploy-steps span[data-state="failed"] { color:#ff9e92; }
+.homelab-deploy-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.homelab-deploy-actions button { padding:6px 8px; border:1px solid rgba(82,229,218,.34); background:rgba(82,229,218,.055); color:#8ce8e1; font:700 7px ui-monospace,monospace; letter-spacing:.07em; }
+.homelab-deploy-actions button.homelab-deploy-primary { border-color:rgba(104,230,189,.62); background:rgba(76,209,166,.12); color:#8af0ce; }
+.homelab-deploy-actions button:disabled { opacity:.45; cursor:not-allowed; }
 .homelab-row { display:flex; align-items:center; gap:9px; min-height:38px; padding:6px 1px; border-bottom:1px solid rgba(74,114,118,.14); }
 .homelab-row-copy { display:grid; gap:3px; min-width:0; flex:1; }
 .homelab-row-copy strong { overflow:hidden; color:#d7eeee; font:600 10px ui-sans-serif,Arial,sans-serif; text-overflow:ellipsis; white-space:nowrap; }

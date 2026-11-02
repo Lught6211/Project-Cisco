@@ -17,11 +17,24 @@ export type HomelabSnapshot = {
   sites: HomelabSite[];
   downloads: { configured: boolean; error?: string; items: HomelabDownload[] };
 };
+export type CiscoDeployStatus = {
+  checked_at: string;
+  branch: string;
+  current_sha: string;
+  latest_sha: string;
+  update_available: boolean;
+  repository_dirty: boolean;
+  deploy_allowed: boolean;
+  blocked_reason: string | null;
+  job: { id?: string; status: "idle" | "running" | "succeeded" | "failed"; message?: string; deployed_sha?: string; steps?: { name: string; status: string }[] };
+};
 export type HomelabLinkState = "loading" | "unconfigured" | "online" | "offline";
 
 type Controller = {
   connection: HomelabConnection;
   snapshot: HomelabSnapshot | null;
+  deployment: CiscoDeployStatus | null;
+  deploymentError: string;
   linkState: HomelabLinkState;
   error: string;
   ready: boolean;
@@ -30,6 +43,8 @@ type Controller = {
   refresh: () => Promise<HomelabSnapshot | null>;
   controlService: (serviceId: string, action: "start" | "stop" | "restart") => Promise<void>;
   controlDownload: (hash: string, action: "pause" | "resume") => Promise<void>;
+  checkDeploy: (force?: boolean) => Promise<CiscoDeployStatus>;
+  deployAgent: () => Promise<CiscoDeployStatus["job"]>;
 };
 
 export function makeServerToken() {
@@ -41,6 +56,8 @@ export function makeServerToken() {
 export function useHomelab(): Controller {
   const [connection, setConnection] = useState<HomelabConnection>({ url: DEFAULT_SERVER_URL, token: "" });
   const [snapshot, setSnapshot] = useState<HomelabSnapshot | null>(null);
+  const [deployment, setDeployment] = useState<CiscoDeployStatus | null>(null);
+  const [deploymentError, setDeploymentError] = useState("");
   const [linkState, setLinkState] = useState<HomelabLinkState>("loading");
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
@@ -60,7 +77,7 @@ export function useHomelab(): Controller {
     setReady(true);
   }, []);
 
-  const request = useCallback(async <T,>(path: string, init?: RequestInit): Promise<T> => {
+  const request = useCallback(async <T,>(path: string, init?: RequestInit, timeoutMs = 9000): Promise<T> => {
     if (!connection.url) throw new Error("Connect to your private homelab server first.");
     const response = await fetch(`${connection.url}${path}`, {
       ...init,
@@ -70,7 +87,7 @@ export function useHomelab(): Controller {
         ...(init?.body ? { "Content-Type": "application/json" } : {}),
         ...init?.headers,
       },
-      signal: AbortSignal.timeout(9000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) throw new Error(data?.detail || `Server request failed (HTTP ${response.status}).`);
@@ -167,7 +184,33 @@ export function useHomelab(): Controller {
     await refresh();
   }, [request, refresh]);
 
-  return { connection, snapshot, linkState, error, ready, connect, disconnect, refresh, controlService, controlDownload };
+  const checkDeploy = useCallback(async (force = false) => {
+    try {
+      const result = await request<CiscoDeployStatus>(`/api/cisco/deploy/status${force ? "?refresh=true" : ""}`, undefined, 35000);
+      setDeployment(result);
+      setDeploymentError("");
+      return result;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Could not check CISCO agent updates.";
+      setDeploymentError(message);
+      throw new Error(message);
+    }
+  }, [request]);
+
+  const deployAgent = useCallback(async () => {
+    try {
+      const result = await request<{ job: CiscoDeployStatus["job"] }>("/api/cisco/deploy", { method: "POST" }, 12000);
+      setDeployment((current) => current ? { ...current, job: result.job, update_available: false } : current);
+      setDeploymentError("");
+      return result.job;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Could not start the CISCO agent deployment.";
+      setDeploymentError(message);
+      throw new Error(message);
+    }
+  }, [request]);
+
+  return { connection, snapshot, deployment, deploymentError, linkState, error, ready, connect, disconnect, refresh, controlService, controlDownload, checkDeploy, deployAgent };
 }
 
 export function HomelabConsole({ open, onClose, controller }: { open: boolean; onClose: () => void; controller: Controller }) {
@@ -176,12 +219,31 @@ export function HomelabConsole({ open, onClose, controller }: { open: boolean; o
   const [showToken, setShowToken] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [checkingDeploy, setCheckingDeploy] = useState(false);
+  const [startingDeploy, setStartingDeploy] = useState(false);
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
     setUrl(controller.connection.url);
     setToken(controller.connection.token);
   }, [controller.connection.url, controller.connection.token]);
+
+  useEffect(() => {
+    if (!open || controller.linkState !== "online") return;
+    if (document.visibilityState === "visible") void controller.checkDeploy(true).catch(() => undefined);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void controller.checkDeploy().catch(() => undefined);
+    }, 10 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [open, controller.linkState, controller.checkDeploy]);
+
+  useEffect(() => {
+    if (!open || controller.deployment?.job.status !== "running") return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void controller.checkDeploy().catch(() => undefined);
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [open, controller.deployment?.job.status, controller.checkDeploy]);
 
   if (!open) return null;
   const { snapshot, linkState } = controller;
@@ -217,6 +279,22 @@ export function HomelabConsole({ open, onClose, controller }: { open: boolean; o
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : `Could not ${action} ${service.label}.`);
     }
+  };
+  const checkDeployment = async () => {
+    setCheckingDeploy(true);
+    setFormError("");
+    try { await controller.checkDeploy(true); }
+    catch (cause) { setFormError(cause instanceof Error ? cause.message : "Could not check for updates."); }
+    finally { setCheckingDeploy(false); }
+  };
+  const startDeployment = async () => {
+    const sha = controller.deployment?.latest_sha.slice(0, 7) || "latest main";
+    if (!window.confirm(`Deploy CISCO homelab agent update ${sha}? This rebuilds the CISCO agent and its Docker guard; monitoring may briefly reconnect. Other homelab apps are not changed.`)) return;
+    setStartingDeploy(true);
+    setFormError("");
+    try { await controller.deployAgent(); }
+    catch (cause) { setFormError(cause instanceof Error ? cause.message : "Could not start the deployment."); }
+    finally { setStartingDeploy(false); }
   };
   const copyToken = async () => {
     if (!navigator.clipboard?.writeText) {
@@ -266,6 +344,21 @@ export function HomelabConsole({ open, onClose, controller }: { open: boolean; o
             <Metric label="UPTIME" value={formatUptime(snapshot.server.uptime_seconds)} />
           </section>
 
+          <section className="homelab-section homelab-deploy-section"><header><h3>CISCO AGENT UPDATES</h3><span>GUIDE · MAIN</span></header>
+            <div className="homelab-deploy-copy">
+              <strong>{controller.deployment?.job.status === "running" ? "DEPLOYMENT IN PROGRESS" : controller.deployment?.update_available ? "UPDATE AVAILABLE" : controller.deployment ? "AGENT IS CURRENT" : "CHECKING RELEASE STATE"}</strong>
+              <small>{controller.deployment?.job.message || (controller.deployment?.current_sha ? `${controller.deployment.current_sha.slice(0, 7)} installed · ${controller.deployment.latest_sha.slice(0, 7)} latest` : "Checks the approved CISCO server agent repository.")}</small>
+              {controller.deployment?.checked_at && <small>LAST CHECKED {new Date(controller.deployment.checked_at).toLocaleTimeString()}</small>}
+              {controller.deployment?.blocked_reason && <small className="homelab-deploy-warning">{controller.deployment.blocked_reason}</small>}
+              {controller.deployment?.job.steps?.length ? <div className="homelab-deploy-steps">{controller.deployment.job.steps.map((step) => <span key={step.name} data-state={step.status}>{step.status === "complete" ? "✓" : step.status === "running" ? "◌" : step.status === "failed" ? "!" : "·"} {step.name}</span>)}</div> : null}
+              <div className="homelab-deploy-actions">
+                <button onClick={() => void checkDeployment()} disabled={checkingDeploy || startingDeploy}>{checkingDeploy ? "CHECKING…" : "CHECK FOR UPDATES"}</button>
+                {controller.deployment?.update_available && <button className="homelab-deploy-primary" onClick={() => void startDeployment()} disabled={!controller.deployment.deploy_allowed || startingDeploy || controller.deployment.job.status === "running"}>{startingDeploy ? "STARTING…" : "DEPLOY UPDATE"}</button>}
+              </div>
+              <small>Deploy is explicit and confirmed. Only the CISCO server agent and its Docker guard are updated.</small>
+            </div>
+          </section>
+
           <section className="homelab-section"><header><h3>CONTAINERS</h3><span>{snapshot.services.length} DETECTED</span></header>
             {snapshot.services.length ? snapshot.services.map((service) => (
               <article className="homelab-row" key={service.id}>
@@ -301,7 +394,7 @@ export function HomelabConsole({ open, onClose, controller }: { open: boolean; o
             ))}
             {!snapshot.downloads.configured && <p className="homelab-muted">qBittorrent connection details are optional and stay on the server.</p>}
           </section>
-          {(formError || controller.error) && <div className="homelab-error" role="alert">{formError || controller.error}</div>}
+          {(formError || controller.deploymentError || controller.error) && <div className="homelab-error" role="alert">{formError || controller.deploymentError || controller.error}</div>}
           <footer className="homelab-foot">UPDATED {new Date(snapshot.checked_at).toLocaleTimeString()}</footer>
         </div>
       )}
