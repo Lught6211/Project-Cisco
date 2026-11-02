@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 const STORAGE_KEY = "cisco.homelab.connection.v1";
-const DEFAULT_SERVER_URL = "https://ubuntu-homelab.tail5d99d8.ts.net";
+const DEFAULT_SERVER_URL = "https://ubuntu-homelab.tail5d99d8.ts.net:8443";
 
 export type HomelabConnection = { url: string; token: string };
 export type HomelabService = { id: string; name: string; label: string; state: string; status: string; controls_allowed: boolean; managed_id: string | null };
@@ -103,10 +103,17 @@ export function useHomelab(): Controller {
       return;
     }
     let active = true;
-    const run = () => refresh().catch(() => undefined);
-    void run();
-    const timer = window.setInterval(() => { if (active) void run(); }, 15000);
-    return () => { active = false; window.clearInterval(timer); };
+    let pending = false;
+    const run = () => {
+      if (!active || pending || document.visibilityState === "hidden") return;
+      pending = true;
+      void refresh().catch(() => undefined).finally(() => { pending = false; });
+    };
+    run();
+    const timer = window.setInterval(run, 15000);
+    const onVisibilityChange = () => { if (document.visibilityState === "visible") run(); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisibilityChange); };
   }, [ready, connection.url, refresh]);
 
   const connect = useCallback(async (rawUrl: string, token: string) => {

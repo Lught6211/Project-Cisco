@@ -17,6 +17,27 @@ type CaptionItem = { id: string; sender: "USER" | "CISCO" | "ULTRON"; text: stri
 type ConversationTurn = { role: "user" | "assistant"; content: string };
 type CorruptionCode = { id: number; value: string; left: number; top: number };
 type HologramSession = { nodeId: string; title: string; summary: string; projection: "model" | "memory"; archetype: string };
+type NodeFilter = "all" | "memory" | "people" | "places" | "tasks" | "operations";
+
+const NODE_FILTERS: Array<{ id: NodeFilter; label: string; kinds: string[] }> = [
+  { id: "all", label: "ALL SIGNALS", kinds: [] },
+  { id: "memory", label: "MEMORY", kinds: ["memory"] },
+  { id: "people", label: "PEOPLE", kinds: ["person"] },
+  { id: "places", label: "PLACES", kinds: ["place"] },
+  { id: "tasks", label: "TASKS", kinds: ["task"] },
+  { id: "operations", label: "OPERATIONS", kinds: ["server", "service", "site", "download"] },
+];
+
+function UtcClock() {
+  const [time, setTime] = useState("--:--:--");
+  useEffect(() => {
+    const update = () => setTime(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: "UTC" }).format(new Date()));
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return <span className="status-time">{time} UTC</span>;
+}
 
 function hologramSubject(prompt: string) {
   const match = prompt.match(/\bhologram\b/i);
@@ -55,6 +76,9 @@ function hologramArchetype(subject: string) {
 export default function Home() {
   const homelab = useHomelab();
   const [serverPanelOpen, setServerPanelOpen] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">("checking");
+  const [nodeFilter, setNodeFilter] = useState<NodeFilter>("all");
+  const [performanceMode, setPerformanceMode] = useState(false);
   const [nodes, setNodes] = useState<Node[]>([
     { id: "cisco", label: "CISCO", kind: "agent", detail: "Autonomous voice agent core runtime", x: 50, y: 48, active: true },
     { id: "maya", label: "Maya Chen", kind: "person", detail: "Primary operator identity profile", x: 20, y: 27 },
@@ -88,7 +112,6 @@ export default function Home() {
   const [hologram, setHologram] = useState<HologramSession | null>(null);
   const [hologramView, setHologramView] = useState<"field" | "intel" | "model">("field");
   const [voiceState, setVoiceState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
-  const [speechLevel, setSpeechLevel] = useState(0);
   const [inputMsg, setInputMsg] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [navigatorOpen, setNavigatorOpen] = useState(false);
@@ -100,6 +123,16 @@ export default function Home() {
   const [corruption, setCorruption] = useState(0);
   const corruptionRef = useRef(0);
   const [corruptionCodes, setCorruptionCodes] = useState<CorruptionCode[]>([]);
+
+  useEffect(() => {
+    try { setPerformanceMode(localStorage.getItem("cisco.performance-mode") === "eco"); } catch { setPerformanceMode(false); }
+  }, []);
+
+  const togglePerformanceMode = () => {
+    const next = !performanceMode;
+    setPerformanceMode(next);
+    try { localStorage.setItem("cisco.performance-mode", next ? "eco" : "cinematic"); } catch { /* Keep the current page setting if storage is unavailable. */ }
+  };
 
   useEffect(() => {
     const target = ultronMode ? 1 : 0;
@@ -190,22 +223,45 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    let disposed = false;
+    let pending = false;
+    let activeController: AbortController | null = null;
     const fetchData = async () => {
+      if (disposed || pending || document.visibilityState === "hidden") return;
+      pending = true;
+      const controller = new AbortController();
+      activeController = controller;
+      const timeout = window.setTimeout(() => controller.abort(), 12000);
       try {
-        const [graphRes, eventsRes] = await Promise.all([
-          fetch(`${API_URL}/api/graph`).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_URL}/api/events`).then((r) => (r.ok ? r.json() : null)),
+        const [healthRes, graphRes, eventsRes] = await Promise.all([
+          fetch(`${API_URL}/health`, { signal: controller.signal }),
+          fetch(`${API_URL}/api/graph`, { signal: controller.signal }).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_URL}/api/events`, { signal: controller.signal }).then((r) => (r.ok ? r.json() : null)),
         ]);
+        if (disposed) return;
+        setBackendStatus(healthRes.ok ? "online" : "offline");
         if (graphRes?.nodes) setNodes(graphRes.nodes);
         if (graphRes?.edges) setEdges(graphRes.edges);
         if (Array.isArray(eventsRes)) setEvents(eventsRes);
-      } catch (e) {
-        console.warn("Backend sync...", e);
+      } catch (error) {
+        if (!disposed && !controller.signal.aborted) console.warn("Backend sync...", error);
+        if (!disposed) setBackendStatus("offline");
+      } finally {
+        window.clearTimeout(timeout);
+        pending = false;
+        if (activeController === controller) activeController = null;
       }
     };
-    fetchData();
-    const interval = setInterval(fetchData, 6000);
-    return () => clearInterval(interval);
+    const refreshOnReturn = () => { if (document.visibilityState === "visible") void fetchData(); };
+    void fetchData();
+    const interval = window.setInterval(() => { void fetchData(); }, 15000);
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    return () => {
+      disposed = true;
+      activeController?.abort();
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+    };
   }, []);
 
   const operationalNodes = useMemo<Node[]>(() => {
@@ -256,6 +312,23 @@ export default function Home() {
   })), [operationalNodes]);
   const sceneNodes = useMemo(() => [...nodes, ...operationalNodes], [nodes, operationalNodes]);
   const sceneEdges = useMemo(() => [...edges, ...operationalEdges], [edges, operationalEdges]);
+  const activeFilter = NODE_FILTERS.find((filter) => filter.id === nodeFilter) ?? NODE_FILTERS[0];
+  const displayedNodes = useMemo(() => sceneNodes.filter((node) => node.kind === "agent" || nodeFilter === "all" || activeFilter.kinds.includes(node.kind)), [sceneNodes, nodeFilter, activeFilter]);
+  const displayedNodeIds = useMemo(() => new Set(displayedNodes.map((node) => node.id)), [displayedNodes]);
+  const displayedEdges = useMemo(() => sceneEdges.filter((edge) => displayedNodeIds.has(edge.source) && displayedNodeIds.has(edge.target)), [sceneEdges, displayedNodeIds]);
+  const filterCounts = useMemo(() => {
+    const counts: Record<NodeFilter, number> = { all: 0, memory: 0, people: 0, places: 0, tasks: 0, operations: 0 };
+    for (const node of sceneNodes) {
+      if (node.kind === "agent") continue;
+      counts.all += 1;
+      if (node.kind === "memory") counts.memory += 1;
+      else if (node.kind === "person") counts.people += 1;
+      else if (node.kind === "place") counts.places += 1;
+      else if (node.kind === "task") counts.tasks += 1;
+      else if (["server", "service", "site", "download"].includes(node.kind)) counts.operations += 1;
+    }
+    return counts;
+  }, [sceneNodes]);
   const selectedNode = sceneNodes.find((n) => n.id === selectedId) || sceneNodes[0];
   const hologramNode = hologram ? nodes.find((node) => node.id === hologram.nodeId) || selectedNode : selectedNode;
   const hologramNeighbors = hologram && hologram.projection === "memory"
@@ -390,24 +463,13 @@ export default function Home() {
       }
       if (preferredVoiceRef.current) utterance.voice = preferredVoiceRef.current;
     };
-    let level = 0;
-    let levelTimer: number | undefined;
     const finishSpeaking = () => {
-      if (levelTimer !== undefined) window.clearInterval(levelTimer);
-      setSpeechLevel(0);
       setVoiceState("idle");
     };
     utterance.volume = 1;
     utterance.onstart = () => setVoiceState("speaking");
-    utterance.onboundary = (event) => {
-      if (event.name !== "word") return;
-      const wordLength = Math.max(1, event.charLength || 1);
-      level = Math.min(1, 0.38 + wordLength * 0.055);
-      setSpeechLevel(level);
-    };
     utterance.onend = finishSpeaking;
     utterance.onerror = finishSpeaking;
-    setSpeechLevel(0);
     setVoiceState("thinking");
     let speechQueued = false;
     let voiceWaitTimer: number | undefined;
@@ -420,11 +482,6 @@ export default function Home() {
       // Keep one chosen voice for the whole page session. If the browser never
       // supplies its voice list, consistently use its built-in default.
       if (!window.speechSynthesis.getVoices().length) voiceChoiceLockedRef.current = true;
-      levelTimer = window.setInterval(() => {
-        level *= 0.82;
-        if (level < 0.025) level = 0;
-        setSpeechLevel(level);
-      }, 45);
       setVoiceState("speaking");
       window.speechSynthesis.speak(utterance);
     };
@@ -703,16 +760,17 @@ export default function Home() {
   };
 
   return (
-    <div className={`cisco-container${ultronMode ? " ultron-mode" : ""}${corruption > 0.005 ? " corruption-active" : ""}${corruption > 0.18 ? " ultron-glitch-active" : ""}`} style={{ "--ultron-corruption": `${corruption * 100}%` } as CSSProperties & { "--ultron-corruption": string }}>
+    <div className={`cisco-container${ultronMode ? " ultron-mode" : ""}${corruption > 0.005 ? " corruption-active" : ""}${corruption > 0.18 ? " ultron-glitch-active" : ""}${performanceMode ? " performance-mode" : ""}`} style={{ "--ultron-corruption": `${corruption * 100}%` } as CSSProperties & { "--ultron-corruption": string }}>
       {/* Interactive 2D memory field, with a 3D Canvas reserved for holograms. */}
       <div className="canvas-layer">
         <MemoryScene
-          nodes={sceneNodes}
-          edges={sceneEdges}
+          nodes={displayedNodes}
+          edges={displayedEdges}
           selected={selectedId}
           coreName={identityOverridden ? "ULTRON" : "CISCO"}
           hologramModel={hologram?.projection === "model" ? { title: hologram.title, archetype: hologram.archetype } : null}
           cameraResetToken={cameraResetToken}
+          performanceMode={performanceMode}
           onHologramDismiss={() => setHologram(null)}
           onSelect={selectNode}
         />
@@ -740,10 +798,10 @@ export default function Home() {
         </div>
 
         <div className="status-center">
-          <span className={`dot ${corruption > 0.005 ? "ultron-dot" : "online"}`} />
-          <span className="status-text">{identityStatus}</span>
+          <span className={`dot ${corruption > 0.005 ? "ultron-dot" : backendStatus === "online" ? "online" : backendStatus === "offline" ? "offline" : "cyan"}`} />
+          <span className="status-text">{corruption > 0.005 ? identityStatus : backendStatus === "online" ? "CORE ONLINE" : backendStatus === "offline" ? "AI LINK OFFLINE" : "SYNCING CORE"}</span>
           <span className="status-divider">|</span>
-          <span className="status-time">09:41:22 UTC</span>
+          <UtcClock />
         </div>
 
         <div className="header-right">
@@ -753,20 +811,38 @@ export default function Home() {
               <polyline points="9 12 11 14 15 10" />
             </svg>
           </div>
+          <button className={`motion-switch${performanceMode ? " eco" : ""}`} onClick={togglePerformanceMode} aria-pressed={performanceMode} title={performanceMode ? "Turn on cinematic motion" : "Reduce motion for better performance"}>
+            <span className="motion-switch-light" />{performanceMode ? "ECO MODE" : "MOTION ON"}
+          </button>
         </div>
       </header>
 
       {/* Subheader Overlay */}
       <div className="subheader-overlay">
-        <div className="eyebrow">// CISCO OPERATIONS FIELD</div>
-        <h2 className="section-title">Memory & homelab / 2D</h2>
+        <div className="eyebrow"><span className="eyebrow-spark">✳</span> CISCO OPERATIONS FIELD</div>
+        <h2 className="section-title">Memory field <span>/ 2D</span></h2>
+        <div className="field-readouts">
+          <span><i className={`field-status-dot ${backendStatus}`} />{backendStatus === "online" ? "AI LINK LIVE" : backendStatus === "offline" ? "AI LINK OFFLINE" : "SYNCING"}</span>
+          <b>{Math.max(0, sceneNodes.length - 1)}<small> NODES</small></b>
+          <b>{sceneEdges.length}<small> LINKS</small></b>
+        </div>
       </div>
 
-      <div className="orbital-badge">⊙ ORBITAL</div>
+      <div className="orbital-badge"><i /> POINT LATTICE <span>LIVE</span></div>
       <button className="memory-search-trigger" onClick={() => setNavigatorOpen(true)} aria-label="Search and focus a memory topic">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="10.8" cy="10.8" r="6.8" /><line x1="16" y1="16" x2="21" y2="21" /></svg>
         <span>FIND TOPIC</span><kbd>CTRL K</kbd>
       </button>
+      <div className="graph-filter-strip" role="toolbar" aria-label="Filter memory field">
+        <span className="graph-filter-caption">FIELD FILTER</span>
+        <div className="graph-filter-list">
+          {NODE_FILTERS.map((filter) => (
+            <button key={filter.id} className={`graph-filter-chip filter-${filter.id}${nodeFilter === filter.id ? " selected" : ""}`} onClick={() => setNodeFilter(filter.id)} aria-pressed={nodeFilter === filter.id}>
+              <i />{filter.label}<b>{filterCounts[filter.id]}</b>
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* MULTIPLE SIMULTANEOUS FLOATING HUD WINDOWS */}
 
@@ -1080,6 +1156,7 @@ export default function Home() {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
           </svg>
+          <span className="voice-spectrum" aria-hidden="true"><i /><i /><i /><i /><i /></span>
           <span>{`${identityOverridden ? "ULTRON // " : ""}${voiceState.toUpperCase()}`}</span>
         </button>
       </footer>

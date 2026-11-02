@@ -37,6 +37,7 @@ export default function MemoryScene2D({
   coreName = "CISCO",
   hologramModel = null,
   cameraResetToken = 0,
+  performanceMode = false,
   onHologramDismiss,
   onSelect,
 }: {
@@ -46,6 +47,7 @@ export default function MemoryScene2D({
   coreName?: string;
   hologramModel?: { title: string; archetype: string } | null;
   cameraResetToken?: number;
+  performanceMode?: boolean;
   onHologramDismiss?: () => void;
   onSelect: (id: string) => void;
 }) {
@@ -56,8 +58,9 @@ export default function MemoryScene2D({
   const [dragOffsets, setDragOffsets] = useState<Record<string, Point>>({});
   const [viewport, setViewport] = useState({ width: 1280, height: 800 });
   const viewportRef = useRef<HTMLDivElement>(null);
-  const backgroundDrag = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
-  const nodeDrag = useRef<{ id: string; x: number; y: number; originX: number; originY: number; moved: boolean } | null>(null);
+  const worldRef = useRef<HTMLDivElement>(null);
+  const backgroundDrag = useRef<{ x: number; y: number; panX: number; panY: number; nextPanX: number; nextPanY: number } | null>(null);
+  const nodeDrag = useRef<{ id: string; x: number; y: number; originX: number; originY: number; dx: number; dy: number; moved: boolean; element: HTMLButtonElement } | null>(null);
 
   const layout = useMemo(() => {
     const byId = new Map(safeNodes.map((node) => [node.id, node]));
@@ -151,35 +154,44 @@ export default function MemoryScene2D({
 
   const beginBackgroundDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || (event.target as HTMLElement).closest(".graph-node, .world-holo-stage")) return;
-    backgroundDrag.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
+    backgroundDrag.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y, nextPanX: pan.x, nextPanY: pan.y };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const moveBackground = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!backgroundDrag.current) return;
-    setPan({
-      x: backgroundDrag.current.panX + event.clientX - backgroundDrag.current.x,
-      y: backgroundDrag.current.panY + event.clientY - backgroundDrag.current.y,
-    });
+    const drag = backgroundDrag.current;
+    if (!drag) return;
+    drag.nextPanX = drag.panX + event.clientX - drag.x;
+    drag.nextPanY = drag.panY + event.clientY - drag.y;
+    if (worldRef.current) worldRef.current.style.transform = `translate(${drag.nextPanX}px, ${drag.nextPanY}px) scale(${zoom})`;
+  };
+  const finishBackgroundDrag = () => {
+    const drag = backgroundDrag.current;
+    if (drag) setPan({ x: drag.nextPanX, y: drag.nextPanY });
+    backgroundDrag.current = null;
   };
   const beginNodeDrag = (event: React.PointerEvent<HTMLButtonElement>, id: string) => {
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     const offset = dragOffsets[id] ?? { x: 0, y: 0 };
-    nodeDrag.current = { id, x: event.clientX, y: event.clientY, originX: offset.x, originY: offset.y, moved: false };
+    nodeDrag.current = { id, x: event.clientX, y: event.clientY, originX: offset.x, originY: offset.y, dx: 0, dy: 0, moved: false, element: event.currentTarget };
   };
   const moveNode = (event: React.PointerEvent<HTMLButtonElement>) => {
     const drag = nodeDrag.current;
     if (!drag) return;
     const dx = (event.clientX - drag.x) / zoom;
     const dy = (event.clientY - drag.y) / zoom;
+    drag.dx = dx;
+    drag.dy = dy;
     if (Math.hypot(dx, dy) > 4) drag.moved = true;
-    if (drag.moved) {
-      setDragOffsets((current) => ({ ...current, [drag.id]: { x: drag.originX + dx, y: drag.originY + dy } }));
-    }
+    if (drag.moved) drag.element.style.setProperty("translate", `${dx}px ${dy}px`);
   };
   const finishNodeDrag = (id: string) => {
     const drag = nodeDrag.current;
-    if (drag && drag.id === id && !drag.moved) onSelect(id);
+    if (drag && drag.id === id) {
+      if (drag.moved) setDragOffsets((current) => ({ ...current, [id]: { x: drag.originX + drag.dx, y: drag.originY + drag.dy } }));
+      else onSelect(id);
+      drag.element.style.removeProperty("translate");
+    }
     nodeDrag.current = null;
   };
   const handleZoom = (event: React.WheelEvent<HTMLDivElement>) => {
@@ -196,16 +208,16 @@ export default function MemoryScene2D({
   return (
     <div
       ref={viewportRef}
-      className={`graph-2d-viewport${hologramModel ? " graph-2d-projecting" : ""}`}
+      className={`graph-2d-viewport${hologramModel ? " graph-2d-projecting" : ""}${performanceMode ? " graph-2d-eco" : ""}`}
       onPointerDown={beginBackgroundDrag}
       onPointerMove={(event) => { moveBackground(event); }}
-      onPointerUp={() => { backgroundDrag.current = null; }}
-      onPointerCancel={() => { backgroundDrag.current = null; }}
+      onPointerUp={finishBackgroundDrag}
+      onPointerCancel={finishBackgroundDrag}
       onWheel={handleZoom}
       aria-label="Interactive 2D memory graph"
     >
       <div className="graph-space-field" aria-hidden="true" />
-      <div className="graph-2d-world" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
+      <div ref={worldRef} className="graph-2d-world" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
         <svg className="graph-2d-links" viewBox={`0 0 ${viewport.width} ${viewport.height}`} preserveAspectRatio="none" aria-hidden="true">
           <g transform={`translate(${centerX} ${centerY})`}>
             {visibleEdges.map((edge) => {
@@ -222,7 +234,7 @@ export default function MemoryScene2D({
           </g>
         </svg>
         <div className="graph-2d-node-layer">
-          {visibleNodes.map((node) => {
+          {visibleNodes.map((node, nodeIndex) => {
             const point = layout.positions.get(node.id) ?? { x: 0, y: 0 };
             const offset = dragOffsets[node.id] ?? { x: 0, y: 0 };
             const selectedNode = node.id === selected;
@@ -245,13 +257,13 @@ export default function MemoryScene2D({
               <button
                 key={node.id}
                 className={`graph-node kind-${node.kind}${isCore ? " graph-core-node" : ""}${selectedNode ? " selected" : ""}${node.active ? " node-active" : ""}`}
-                style={{ left: `calc(50% + ${left})`, top: `calc(50% + ${top})`, "--node-color": nodeColor, "--node-delay": `${delay}s`, "--label-x": `${labelX}px`, "--label-y": `${labelY}px`, "--label-transform": labelTransform } as React.CSSProperties}
+                style={{ left: `calc(50% + ${left})`, top: `calc(50% + ${top})`, "--node-color": nodeColor, "--node-delay": `${delay}s`, "--node-entry-delay": `${Math.min(nodeIndex * .035, 1.05)}s`, "--label-x": `${labelX}px`, "--label-y": `${labelY}px`, "--label-transform": labelTransform } as React.CSSProperties}
                 title={`${node.label}${node.detail ? ` — ${node.detail}` : ""}`}
                 aria-label={`${node.label}, ${node.kind}${selectedNode ? ", focused" : ""}. Drag to rearrange.`}
                 onPointerDown={(event) => beginNodeDrag(event, node.id)}
                 onPointerMove={moveNode}
                 onPointerUp={() => finishNodeDrag(node.id)}
-                onPointerCancel={() => { nodeDrag.current = null; }}
+                onPointerCancel={(event) => { event.currentTarget.style.removeProperty("translate"); nodeDrag.current = null; }}
                 onDoubleClick={(event) => {
                   event.preventDefault();
                   if (isCore && hologramModel) onHologramDismiss?.();
@@ -261,7 +273,7 @@ export default function MemoryScene2D({
                   <span className="node-orbit" />
                   {!isCore && <span className="node-orbit node-orbit-secondary" />}
                   <span className="node-sphere" />
-                  {isCore && <><span className="core-ring core-ring-one" /><span className="core-ring core-ring-two" /></>}
+                  {isCore && <><span className="core-ring core-ring-one" /><span className="core-ring core-ring-two" /><span className="core-ring core-ring-three" /></>}
                 </span>
                 <span className={`node-label-card${isCore ? " core-label-card" : ""}`}>
                   {!isCore && <i />}
