@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSoc
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from . import research
 from .agent import AgentRuntime
 from .realtime import RealtimeBridge, provider_audio_loop
 from .web import SearchResult, search_web
@@ -73,6 +74,10 @@ class AgentAnswer(BaseModel):
     provider: str
     sources: list[SearchResult]
     memory_node_id: str
+
+
+class ResearchRequest(BaseModel):
+    topic: str = Field(min_length=2, max_length=300)
 
 
 class CallRequest(BaseModel):
@@ -435,6 +440,51 @@ async def send_message(payload: AgentMessage) -> Event:
     state.updated_at = datetime.now(timezone.utc).isoformat()
     save_state(state)
     return event
+
+
+MAX_RUNNING_RESEARCH = 2
+research_tasks: set[asyncio.Task] = set()
+
+
+async def run_research_task(job: research.ResearchJob) -> None:
+    """Run the blocking research pipeline in a worker thread, then store the result in memory."""
+    try:
+        await asyncio.to_thread(research.run_job, job, agent)
+        if job.status != "error":
+            job.memory_node_id = remember_research(f"Research: {job.topic}", job.summary, job.sources, "cisco")
+            events.insert(0, Event(
+                id=f"evt-{secrets.token_hex(4)}",
+                type="memory",
+                title=f"Research report: {job.title.title()}",
+                detail=f"{len(job.blocks)} blocks from {len(job.sources)} sources via {job.provider or 'sources-only'}",
+                timestamp=JUST_NOW,
+            ))
+            job.status = "done"
+    except Exception as exc:  # keep the poller informed instead of leaving the job "running" forever
+        job.status = "error"
+        job.error = f"Research failed: {str(exc)[:200]}"
+        job.stage = "RESEARCH FAILED"
+        job.finished_at = job.finished_at or job.started_at
+
+
+@app.post("/api/research")
+async def start_research(payload: ResearchRequest) -> dict[str, str]:
+    running = sum(1 for job in research.JOBS.values() if job.status == "running")
+    if running >= MAX_RUNNING_RESEARCH:
+        raise HTTPException(status_code=429, detail="CISCO is already running two research jobs. Try again in a moment.")
+    job = research.create_job(payload.topic)
+    task = asyncio.create_task(run_research_task(job))
+    research_tasks.add(task)  # hold a reference so the task is not garbage collected mid-run
+    task.add_done_callback(research_tasks.discard)
+    return {"id": job.id, "topic": job.topic, "title": job.title}
+
+
+@app.get("/api/research/{job_id}")
+def get_research(job_id: str) -> research.ResearchJob:
+    job = research.JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Research job not found or expired.")
+    return job
 
 
 @app.post("/api/agent/ask")

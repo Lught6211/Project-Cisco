@@ -13,6 +13,35 @@ CiscoAI is a local-first foundation for an autonomous, voice-enabled AI agent wi
 - frontend/app/MemoryScene2D.tsx: lightweight, pannable 2D memory and operations field; Three.js is loaded only for interactive 3D hologram models.
 - Topic-scoped chat history keeps explicit `user`/`assistant` turn types, including local Kaizen responses, so the production TypeScript build accepts every chat path.
 - Gemini is the default hosted provider when `GEMINI_API_KEY` is configured. Local Ollama remains available without a paid API key.
+- `backend/app/research.py`: research jobs behind `POST /api/research` and `GET /api/research/{id}` that turn a topic into dashboard blocks (text, chart, figure, image) with sources.
+- `frontend/app/hud/` and `frontend/app/hud.css`: the briefing-wall HUD that is now the default view (below). The memory graph, hologram, homelab panels, Kaizen and Ultron are unchanged and sit behind the **MEMORY** chip.
+
+## Briefing-wall HUD (default view)
+
+The dashboard opens like a sci-fi assistant console instead of the memory graph:
+
+1. **Boot:** a tumbling 3D gyroscope snaps flat into the CISCO reactor logo. The chip row and the microphone strip fade in.
+2. **Top-right chips:** `HISTORY`, `TIDY`, `CLEAR VIEW`, `CAMERA`, a `CAMERA SOURCE` selector and `SCREEN`. A second row has `MEMORY` (opens the previous memory-graph view, with a `BACK TO HUD` button), `SERVER` (homelab tile) and `LOG` (chat log).
+3. **Bottom-left strip:** a red level meter with `LVL` and `PK` dB readouts, a `MIC` / `MUTE` button and the live transcript. Press `/` (or click the transcript) to type instead.
+4. **Research:** say or type "Hey Cisco, research solid state batteries". A blue `RESEARCH // ACTIVE` card shows a timer, the stage, a segmented progress bar and `BLOCKS` / `SOURCES` counters. The logo docks bottom-right and tiles power on across the wall as the report arrives.
+5. **The wall:** text, chart, figure and image tiles are packed on a grid (photos on the right). Drag a tile by its header, flip text pages with the dots, expand a tile with the corner square, close it with the `x`. `TIDY` re-packs, `CLEAR VIEW` wipes the wall. Camera and screen share open as live tiles. Finished reports are kept in `HISTORY` (browser storage only) and can be reopened.
+
+Voice and commands:
+
+- Speech recognition uses the browser's Web Speech API (Chrome or Edge). The wake word is "Hey Cisco", followed by a 25 second window where no wake word is needed. Replies are spoken aloud.
+- Spoken or typed shortcuts: "clear the screen", "tidy up", "open the camera", "share my screen", "open memory", "open history", "open the log", "Hi Ultron" / "Hi Cisco".
+- `http://localhost:3000/?demo` (or saying "run the demo") plays a scripted sample report with no backend, clearly labeled as sample data.
+
+Research API:
+
+```powershell
+$job = Invoke-RestMethod http://localhost:8000/api/research -Method Post -ContentType 'application/json' -Body '{"topic":"solid state batteries"}'
+Invoke-RestMethod "http://localhost:8000/api/research/$($job.id)"
+```
+
+The job gathers Wikipedia, Wikimedia Commons images and DuckDuckGo results, then asks the configured AI provider to write the blocks as JSON. Text blocks cite their source. Charts and figures only come from the AI provider and are meant to use numbers found in the sources; if no provider is configured or the model's JSON is invalid, the job falls back to text and image blocks built directly from the sources. At most two research jobs run at once. Finished topics are saved to the memory graph.
+
+Keep this in mind: Web Speech recognition, camera and screen capture need a secure context (`https://` or `localhost`) and the browser's permission prompt. The HUD uses an original CISCO wordmark and artwork.
 
 ## Run locally
 
@@ -71,7 +100,7 @@ If Ollama is unavailable, CISCO displays a provider connection error in the chat
 
 ### Research, memory, and browser speech
 
-Use the dashboard directive box to ask a question. The app gathers free Wikipedia/DuckDuckGo context for a new topic, sends the request and recent conversation turns to the configured model, stores the topic and up to three sources in the memory graph, and returns the answer. Short follow-ups stay grounded in the conversation and selected graph node. Clicking a node selects and frames it and makes it the topic context for the next request; it does not open the inspector. New research nodes become children of the selected topic and are focused when created. Open the focus inspector from the right-side dock when needed. Replies are spoken with the browser's built-in speech synthesis; CISCO prefers an available English voice commonly identified as feminine and pins the selected voice for the page session. Voice names and availability depend on the browser and operating system, so the browser's default voice is used if no matching voice is available. The microphone control currently changes the listening indicator; speech recognition is not connected to the backend chat flow.
+Use the dashboard directive box to ask a question. The app gathers free Wikipedia/DuckDuckGo context for a new topic, sends the request and recent conversation turns to the configured model, stores the topic and up to three sources in the memory graph, and returns the answer. Short follow-ups stay grounded in the conversation and selected graph node. Clicking a node selects and frames it and makes it the topic context for the next request; it does not open the inspector. New research nodes become children of the selected topic and are focused when created. Open the focus inspector from the right-side dock when needed. Replies are spoken with the browser's built-in speech synthesis; CISCO prefers an available English voice commonly identified as feminine and pins the selected voice for the page session. Voice names and availability depend on the browser and operating system, so the browser's default voice is used if no matching voice is available. In the default HUD view the microphone feeds browser speech recognition into the same chat flow (see the HUD section above); in the memory view the old microphone control still only toggles the listening indicator.
 
 The dashboard is responsive and installable as a CiscoAI PWA on desktop and mobile browsers. The main memory field is a lightweight 2D point lattice with CISCO at the center and memory generations spreading outward. Single-child memory chains turn into a slow spiral instead of stacking into a line. The field uses a shifting multicolor atmosphere, animated node orbits, a compact rose-pink reactor core with rotating orbital arcs and radial tick marks, an arrival effect for new nodes, and restrained signal motion on selected relationships. Use the live category filters to isolate memories, people, places, tasks, or server operations; drag nodes to arrange them, drag empty space to pan, scroll or pinch to zoom, and select a topic to focus it for follow-up chat. Dragging updates the scene directly without re-rendering every node on each pointer movement. The **Motion On / Eco Mode** switch saves your choice on the device; Eco Mode quiets the scene and removes blur effects for slower hardware. Background API checks run every 15 seconds while the tab is visible and pause in hidden tabs. The view resets directly to a usable camera position. Function panels remain closed after reload and open from the dock. Topic labels stay with their nodes, and the graph stays readable on phone screens. The center core and connected memories remain in the field when CISCO projects a hologram; explicit requests such as “show me a hologram of a car” put an interactive 3D model beside the core, fold the memory nodes away, and keep CISCO visible. Drag the 3D model to rotate it, zoom with the pointer wheel or pinch, and pan to inspect it. Cars support animated door, hood, trunk, and engine controls. Double-click CISCO or use the model's return control to dismiss it and restore the memory field. Current procedural 3D model families include cars, engines, planets, people, animals, molecules, buildings, aircraft, and trees, with a labeled concept model for unrecognized subjects. These are locally generated interactive visualizations rather than photorealistic asset generation. The procedural hologram remains a WebGL scene loaded as a separate on-demand browser chunk; the memory graph itself no longer runs a continuous 3D renderer.
 
@@ -83,7 +112,7 @@ The production build is warning-free after declaring Autoprefixer explicitly in 
 
 The primary 2D canvas has no continuously animated 3D graph render loop, reducing GPU work on mid-range hardware. Three.js and React Three Fiber are used only while a hologram model is open, where render density is capped for performance.
 
-The microphone control currently changes the listening state only; browser speech recognition is not wired into the dashboard flow. CISCO reads successful chat replies aloud through browser speech synthesis.
+CISCO reads successful chat replies aloud through browser speech synthesis.
 
 To install it, run the frontend, open `http://localhost:3000`, then use the browser menu: Chrome/Edge on Windows choose `Install CiscoAI`; Chrome on Android choose `Add to Home screen` or `Install app`. For local agent responses, keep the backend running. On the hosted deployment, the Render backend serves agent responses and memory updates.
 

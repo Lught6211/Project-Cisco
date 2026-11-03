@@ -4,8 +4,8 @@
   "description": "Local-first autonomous intelligence control surface",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#081011",
-  "theme_color": "#081011",
+  "background_color": "#03040b",
+  "theme_color": "#03040b",
   "orientation": "any",
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }

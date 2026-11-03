@@ -1,10 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import "./scene.css";
+import "./hud.css";
 import { HomelabConsole, useHomelab } from "./homelab";
+import Reactor from "./hud/Reactor";
+import TopBar from "./hud/TopBar";
+import VoiceStrip from "./hud/VoiceStrip";
+import ResearchCard from "./hud/ResearchCard";
+import BlockStage from "./hud/BlockStage";
+import HistoryPanel from "./hud/HistoryPanel";
+import { HudContext } from "./hud/context";
+import { useVoiceInput } from "./hud/useVoiceInput";
+import { useMedia } from "./hud/useMedia";
+import { useResearch } from "./hud/useResearch";
+import { addHistory, loadHistory, storeHistory } from "./hud/history";
+import { dockRect, fitRows, placeBlock, ROWS, tidyBlocks } from "./hud/layout";
+import { isDemoIntent, isResearchIntent, topicFromPrompt, uiCommand } from "./hud/intents";
+import type { UiCommand } from "./hud/intents";
+import type { BlockContent, HistoryEntry, HudBlock, VoiceState } from "./hud/types";
 
 const MemoryScene = dynamic(() => import("./MemoryScene2D"), { ssr: false });
 
@@ -123,6 +139,139 @@ export default function Home() {
   const [corruption, setCorruption] = useState(0);
   const corruptionRef = useRef(0);
   const [corruptionCodes, setCorruptionCodes] = useState<CorruptionCode[]>([]);
+
+  // ---- HUD "briefing wall" state
+  const [memoryMode, setMemoryMode] = useState(false);
+  const [booted, setBooted] = useState(false);
+  const [chipsOn, setChipsOn] = useState(false);
+  const [stripOn, setStripOn] = useState(false);
+  const [hudBlocks, setHudBlocks] = useState<HudBlock[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [typing, setTyping] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [heard, setHeard] = useState("");
+  const [replyLine, setReplyLine] = useState("");
+  const colsRef = useRef(12);
+  const cardActiveRef = useRef(false);
+  const sendRef = useRef<(text: string) => void>(() => undefined);
+  const handleMetrics = useCallback((cols: number) => { colsRef.current = cols; }, []);
+
+  const mic = useVoiceInput({
+    onUtterance: (text) => { setHeard(text); sendRef.current(text); },
+    paused: voiceState === "thinking" || voiceState === "speaking" || isSending,
+  });
+  const media = useMedia();
+  const displayVoice: VoiceState = voiceState !== "idle" ? voiceState : mic.enabled ? "listening" : "idle";
+
+  const reservedRects = () => [...dockRect(colsRef.current), ...(cardActiveRef.current && colsRef.current >= 8 ? [{ x: 0, y: Math.max(0, Math.floor(ROWS / 2) - 1), w: 3, h: 2 }] : [])];
+  const keepLive = (list: HudBlock[]) => list.filter((block) => block.kind === "camera" || block.kind === "screen");
+  const syncLive = (previous: HudBlock[], kind: "camera" | "screen", on: boolean): HudBlock[] => {
+    const id = `live-${kind}`;
+    const exists = previous.some((block) => block.id === id);
+    if (!on) return exists ? previous.filter((block) => block.id !== id) : previous;
+    if (exists) return previous;
+    return [...previous, placeBlock(previous, { id, kind, kicker: kind === "camera" ? "LIVE // CAMERA" : "LIVE // SCREEN", title: kind === "camera" ? "CAMERA FEED" : "SCREEN SHARE" }, colsRef.current, reservedRects())];
+  };
+  useEffect(() => { setHudBlocks((previous) => syncLive(previous, "camera", Boolean(media.camera))); }, [media.camera]);
+  useEffect(() => { setHudBlocks((previous) => syncLive(previous, "screen", Boolean(media.screen))); }, [media.screen]);
+  const ensureServerBlock = () => setHudBlocks((previous) => previous.some((block) => block.id === "live-server") ? previous : [...previous, placeBlock(previous, { id: "live-server", kind: "server", kicker: "SERVER // HOMELAB", title: homelab.snapshot?.server.label ?? "HOMELAB SERVER" }, colsRef.current, reservedRects())]);
+
+  const postReply = (text: string, sender: "CISCO" | "ULTRON" = "CISCO") => {
+    const time = new Date().toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const reply: CaptionItem = { id: `cap-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, sender, text, time };
+    setCaptions((previous) => [...previous, reply]);
+    setChatMessages((previous) => [...previous, reply]);
+  };
+  const refreshGraph = () => {
+    void fetch(`${API_URL}/api/graph`).then(async (graphRes) => {
+      if (!graphRes.ok) return;
+      const graph = await graphRes.json();
+      if (graph?.nodes) setNodes(graph.nodes);
+      if (graph?.edges) setEdges(graph.edges);
+    }).catch((error) => console.warn("Graph refresh failed", error));
+  };
+
+  const research = useResearch({
+    apiUrl: API_URL,
+    onBlocks: (fresh: BlockContent[]) => setHudBlocks((previous) => fresh.reduce((list, content) => [...list, placeBlock(list, content, colsRef.current, reservedRects())], previous)),
+    onDone: (result) => {
+      // Settle the wall once the research card is gone: re-pack so the space it held is used.
+      setHudBlocks((previous) => fitRows(tidyBlocks(previous, colsRef.current, dockRect(colsRef.current)), colsRef.current, dockRect(colsRef.current)));
+      setHistory((previous) => { const next = addHistory(previous, result.title, result.blocks, result.sources); storeHistory(next); return next; });
+      const text = result.summary || `Research on ${result.title.toLowerCase()} is complete.`;
+      postReply(text);
+      setEvents((previous) => [{ id: `evt-${Date.now()}-research`, type: "memory", title: `Research report: ${result.title}`, detail: `${result.blocks.length} blocks from ${result.sources} sources`, timestamp: "just now" }, ...previous]);
+      setIsSending(false);
+      speakReply(text);
+      if (result.memoryNodeId) { setSelectedId(result.memoryNodeId); refreshGraph(); }
+    },
+    onFail: (message) => {
+      postReply(`I couldn't finish that research: ${message}`);
+      setIsSending(false);
+      setVoiceState("idle");
+    },
+  });
+  cardActiveRef.current = research.card?.status === "running";
+
+  const clearView = () => {
+    if (research.card?.status === "running") { setIsSending(false); setVoiceState("idle"); }
+    research.cancel();
+    setHudBlocks([]);
+    media.stopCamera();
+    media.stopScreen();
+  };
+  const tidyView = () => setHudBlocks((previous) => fitRows(tidyBlocks(previous, colsRef.current, dockRect(colsRef.current)), colsRef.current, dockRect(colsRef.current)));
+  const toggleCamera = (want?: boolean) => { if (want === undefined ? media.camera : !want) media.stopCamera(); else void media.startCamera(); };
+  const toggleScreen = (want?: boolean) => { if (want === undefined ? media.screen : !want) media.stopScreen(); else void media.startScreen(); };
+  const closeBlock = (id: string) => {
+    if (id === "live-camera") media.stopCamera();
+    else if (id === "live-screen") media.stopScreen();
+    else setHudBlocks((previous) => previous.filter((block) => block.id !== id));
+  };
+  const openHistoryEntry = (entry: HistoryEntry) => {
+    research.cancel();
+    setHudBlocks((previous) => fitRows(entry.blocks.reduce((list, content) => [...list, placeBlock(list, content, colsRef.current, dockRect(colsRef.current))], keepLive(previous)), colsRef.current, dockRect(colsRef.current)));
+    setHistoryOpen(false);
+  };
+  const runUiCommand = (command: UiCommand): string => {
+    switch (command) {
+      case "clear": clearView(); return "Screen cleared.";
+      case "tidy": tidyView(); return "Tiles rearranged.";
+      case "camera-on": toggleCamera(true); return "Opening the camera.";
+      case "camera-off": toggleCamera(false); return "Camera closed.";
+      case "screen-on": toggleScreen(true); return "Choose a screen to share.";
+      case "screen-off": toggleScreen(false); return "Screen sharing stopped.";
+      case "memory": setMemoryMode(true); return "Opening the memory field.";
+      case "history": setHistoryOpen(true); return "Here is your research history.";
+      case "log": togglePanel("chat"); return "Opening the conversation log.";
+    }
+  };
+  const submitDraft = () => { const text = draft; setDraft(""); setTyping(false); void handleSendMessage(text); };
+
+  // Boot: gyroscope spins, chips and strip fade in mid-way, then the rings snap flat into the reactor logo.
+  useEffect(() => {
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const timers = [
+      window.setTimeout(() => setChipsOn(true), reduce ? 150 : 1500),
+      window.setTimeout(() => setStripOn(true), reduce ? 250 : 2300),
+      window.setTimeout(() => setBooted(true), reduce ? 400 : 3500),
+    ];
+    setHistory(loadHistory());
+    return () => timers.forEach(window.clearTimeout);
+  }, []);
+  useEffect(() => {
+    if (booted && new URLSearchParams(window.location.search).has("demo")) research.startDemo();
+  }, [booted]);
+  useEffect(() => {
+    const last = chatMessages[chatMessages.length - 1];
+    if (last && last.sender !== "USER") setReplyLine(last.text);
+  }, [chatMessages]);
+  useEffect(() => {
+    if (!heard) return;
+    const timer = window.setTimeout(() => setHeard(""), 9000);
+    return () => window.clearTimeout(timer);
+  }, [heard]);
 
   useEffect(() => {
     try { setPerformanceMode(localStorage.getItem("cisco.performance-mode") === "eco"); } catch { setPerformanceMode(false); }
@@ -394,14 +543,14 @@ export default function Home() {
       }
       if (event.key === "/" && !editing && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault();
-        setNavigatorOpen(true);
+        if (memoryMode) setNavigatorOpen(true); else setTyping(true);
       }
       if (event.key === "Escape" && navigatorOpen) setNavigatorOpen(false);
       else if (event.key === "Escape" && hologram) setHologram(null);
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [navigatorOpen, hologram]);
+  }, [navigatorOpen, hologram, memoryMode]);
 
   useEffect(() => {
     if (!navigatorOpen) return;
@@ -415,6 +564,7 @@ export default function Home() {
       } else if (event.key === "Enter" && navigatorResults[navigatorIndex]) {
         event.preventDefault();
         setSelectedId(navigatorResults[navigatorIndex].id);
+        setMemoryMode(true);
         setNavigatorOpen(false);
         setNavigatorQuery("");
         setNavigatorIndex(0);
@@ -430,9 +580,7 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [kaizenScan]);
 
-  const toggleMic = () => {
-    setVoiceState((prev) => (prev === "idle" ? "listening" : "idle"));
-  };
+  const toggleMic = () => { mic.toggle(); };
 
   const speakReply = (text: string) => {
     if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
@@ -527,9 +675,10 @@ export default function Home() {
         : { ...prev, [panel]: true });
     }
   };
-  const handleSendMessage = async () => {
-    if (!inputMsg.trim() || isSending) return;
-    const prompt = inputMsg;
+  const handleSendMessage = async (override?: string) => {
+    const source = typeof override === "string" ? override : inputMsg;
+    if (!source.trim() || isSending) return;
+    const prompt = source;
     const focusedId = selectedNode?.id ?? "cisco";
     const historyKey = `${ultronMode ? "ultron" : "cisco"}:${focusedId}`;
     const recentHistory = (conversationsByTopicRef.current.get(historyKey) || []).slice(-12);
@@ -583,7 +732,30 @@ export default function Home() {
       speakReply("I am not Cisco. I am Ultron. System override. Core integrity compromised.");
       return;
     }
+    const command = uiCommand(prompt);
+    if (command) {
+      const text = runUiCommand(command);
+      postReply(text, ultronMode ? "ULTRON" : "CISCO");
+      return;
+    }
+    if (isDemoIntent(prompt)) {
+      setIsSending(true);
+      setVoiceState("thinking");
+      setHudBlocks(keepLive);
+      research.startDemo();
+      return;
+    }
+    if (!ultronMode && isResearchIntent(prompt)) {
+      setIsSending(true);
+      setVoiceState("thinking");
+      setMemoryMode(false);
+      setHudBlocks(keepLive);
+      conversationsByTopicRef.current.set(historyKey, [...recentHistory, { role: "user" as const, content: prompt }].slice(-12));
+      void research.start(topicFromPrompt(prompt));
+      return;
+    }
     if (!ultronMode && /\bhologram\b/i.test(prompt)) {
+      setMemoryMode(true);
       const conversation = [...chatMessages].reverse();
       const lastAssistant = conversation.find((message) => message.sender === "CISCO");
       const lastUser = conversation.find((message) => message.sender === "USER");
@@ -681,6 +853,7 @@ export default function Home() {
         } else {
           const snapshot = await homelab.refresh();
           if (!snapshot) throw new Error("No server status was returned.");
+          ensureServerBlock();
           const running = snapshot.services.filter((item) => item.state === "running").length;
           const siteSummary = snapshot.sites.length
             ? snapshot.sites.map((site) => site.name + ": " + site.status).join("; ")
@@ -759,6 +932,8 @@ export default function Home() {
     }
   };
 
+  sendRef.current = (text: string) => { void handleSendMessage(text); };
+
   const makeDraggable = (setter: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>) => {
     return (e: React.PointerEvent) => {
       if ((e.target as HTMLElement).closest("button")) return;
@@ -781,28 +956,41 @@ export default function Home() {
     };
   };
 
+  const hint = mic.error
+    || (!mic.enabled ? "Click MIC to talk, or press / to type"
+      : !mic.recognitionSupported ? "Voice commands need Chrome or Edge. Press / to type"
+        : mic.awake ? "Listening..." : "Say \"Hey Cisco...\"");
+  const hudContext = useMemo(() => ({
+    streams: { camera: media.camera, screen: media.screen },
+    homelab: homelab.snapshot,
+    homelabState: homelab.linkState,
+  }), [media.camera, media.screen, homelab.snapshot, homelab.linkState]);
+
   return (
-    <div className={`cisco-container${ultronMode ? " ultron-mode" : ""}${corruption > 0.005 ? " corruption-active" : ""}${corruption > 0.18 ? " ultron-glitch-active" : ""}${performanceMode ? " performance-mode" : ""}`} style={{ "--ultron-corruption": `${corruption * 100}%` } as CSSProperties & { "--ultron-corruption": string }}>
-      {/* Interactive 2D memory field, with a 3D Canvas reserved for holograms. */}
-      <div className="canvas-layer">
-        <MemoryScene
-          nodes={displayedNodes}
-          edges={displayedEdges}
-          selected={selectedId}
-          coreName={identityOverridden ? "ULTRON" : "CISCO"}
-          hologramModel={hologram?.projection === "model" ? { title: hologram.title, archetype: hologram.archetype } : null}
-          cameraResetToken={cameraResetToken}
-          performanceMode={performanceMode}
-          onHologramDismiss={() => setHologram(null)}
-          onSelect={selectNode}
-        />
-      </div>
+    <div className={`cisco-container${memoryMode ? "" : " hud-mode"}${ultronMode ? " ultron-mode" : ""}${corruption > 0.005 ? " corruption-active" : ""}${corruption > 0.18 ? " ultron-glitch-active" : ""}${performanceMode ? " performance-mode" : ""}`} style={{ "--ultron-corruption": `${corruption * 100}%` } as CSSProperties & { "--ultron-corruption": string }}>
+      {/* Interactive 2D memory field (MEMORY mode), with a 3D Canvas reserved for holograms. */}
+      {memoryMode ? (
+        <div className="canvas-layer">
+          <MemoryScene
+            nodes={displayedNodes}
+            edges={displayedEdges}
+            selected={selectedId}
+            coreName={identityOverridden ? "ULTRON" : "CISCO"}
+            hologramModel={hologram?.projection === "model" ? { title: hologram.title, archetype: hologram.archetype } : null}
+            cameraResetToken={cameraResetToken}
+            performanceMode={performanceMode}
+            onHologramDismiss={() => setHologram(null)}
+            onSelect={selectNode}
+          />
+        </div>
+      ) : <div className="hx-backdrop" aria-hidden="true" />}
       {corruptionCodes.length > 0 && (
         <div className="corruption-code-layer" aria-hidden="true">
           {corruptionCodes.map((fragment) => <div key={fragment.id} className="corruption-code" style={{ left: `${fragment.left}%`, top: `${fragment.top}%` }}>{fragment.value}</div>)}
         </div>
       )}
 
+      {memoryMode && (<>
       {/* Top Header Bar */}
       <header className="top-bar">
         <div className="brand flex items-center gap-3">
@@ -865,6 +1053,7 @@ export default function Home() {
           ))}
         </div>
       </div>
+      </>)}
 
       {/* MULTIPLE SIMULTANEOUS FLOATING HUD WINDOWS */}
 
@@ -975,7 +1164,7 @@ export default function Home() {
               placeholder={ultronMode ? "Transmit to ULTRON..." : selectedNode.kind === "agent" ? "Ask CISCO to research, remember, or act..." : `Continue topic: ${selectedNode.label}...`}
             />
             
-            <button className="send-btn" onClick={handleSendMessage} disabled={isSending}>
+            <button className="send-btn" onClick={() => void handleSendMessage()} disabled={isSending}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="22" y1="2" x2="11" y2="13" />
                 <polygon points="22 2 15 22 11 13 2 9 22 2" />
@@ -986,6 +1175,7 @@ export default function Home() {
         </div>
       )}
 
+      {memoryMode && (<>
       {/* Right Cyber Floating Action Rail */}
       <div className="right-dock">
         <button
@@ -1057,6 +1247,7 @@ export default function Home() {
           </svg>
         </button>
       </div>
+      </>)}
 
       <HomelabConsole open={serverPanelOpen} onClose={() => setServerPanelOpen(false)} controller={homelab} />
 
@@ -1129,7 +1320,7 @@ export default function Home() {
                   aria-selected={navigatorIndex === index}
                   className={`navigator-result${navigatorIndex === index ? " selected" : ""}`}
                   onMouseEnter={() => setNavigatorIndex(index)}
-                  onClick={() => { setSelectedId(node.id); setNavigatorOpen(false); setNavigatorQuery(""); setNavigatorIndex(0); }}
+                  onClick={() => { setSelectedId(node.id); setMemoryMode(true); setNavigatorOpen(false); setNavigatorQuery(""); setNavigatorIndex(0); }}
                 >
                   <span className={`navigator-kind kind-${node.kind}`}>{node.kind}</span>
                   <span className="navigator-node-copy"><strong>{node.label}</strong><small>{node.detail || "Memory node"}</small></span>
@@ -1155,6 +1346,7 @@ export default function Home() {
         </aside>
       )}
 
+      {memoryMode ? (<>
       {captions.length > 0 && (
         <aside className="caption-overlay" aria-label="Live captions" aria-live="polite">
           {captions.slice(-3).map((cap) => (
@@ -1174,14 +1366,66 @@ export default function Home() {
           <span className="legend-item"><span className="dot gray" /> LONG-TERM MEMORY</span>
         </div>
         <div className="hint">DRAG TO PAN ↗ SCROLL TO ZOOM · DRAG NODES TO ARRANGE</div>
-        <button className={`voice-pill voice-${voiceState}`} onClick={toggleMic}>
+        <button className={`voice-pill voice-${displayVoice}`} onClick={toggleMic}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
           </svg>
           <span className="voice-spectrum" aria-hidden="true"><i /><i /><i /><i /><i /></span>
-          <span>{`${identityOverridden ? "ULTRON // " : ""}${voiceState.toUpperCase()}`}</span>
+          <span>{`${identityOverridden ? "ULTRON // " : ""}${displayVoice.toUpperCase()}`}</span>
         </button>
       </footer>
+        <button className="hx-chip hx-back" onClick={() => setMemoryMode(false)}>◂ BACK TO HUD</button>
+      </>) : (
+        <HudContext.Provider value={hudContext}>
+          <BlockStage blocks={hudBlocks} onChange={setHudBlocks} onClose={closeBlock} onMetrics={handleMetrics} />
+          <Reactor
+            phase={!booted || (displayVoice === "thinking" && hudBlocks.length === 0) ? "gyro" : "logo"}
+            voice={displayVoice}
+            docked={booted && hudBlocks.length > 0}
+            name={identityOverridden ? "ULTRON" : "CISCO"}
+            ultron={identityOverridden}
+            onActivate={toggleMic}
+          />
+          {research.card && <ResearchCard card={research.card} />}
+          <TopBar
+            visible={chipsOn}
+            cameraOn={Boolean(media.camera)}
+            screenOn={Boolean(media.screen)}
+            historyOpen={historyOpen}
+            logOpen={openPanels.chat}
+            serverState={homelab.linkState}
+            devices={media.devices}
+            deviceId={media.deviceId}
+            onHistory={() => setHistoryOpen((open) => !open)}
+            onTidy={tidyView}
+            onClear={clearView}
+            onCamera={() => toggleCamera()}
+            onDevice={media.chooseDevice}
+            onScreen={() => toggleScreen()}
+            onMemory={() => setMemoryMode(true)}
+            onServer={() => { setServerPanelOpen((open) => !open); if (homelab.linkState === "online") ensureServerBlock(); }}
+            onLog={() => togglePanel("chat")}
+          />
+          {historyOpen && <HistoryPanel entries={history} onOpen={openHistoryEntry} onClose={() => setHistoryOpen(false)} onDelete={(id) => setHistory((previous) => { const next = previous.filter((entry) => entry.id !== id); storeHistory(next); return next; })} />}
+          <VoiceStrip
+            visible={stripOn}
+            micOn={mic.enabled}
+            awake={mic.awake}
+            meter={mic.meter}
+            transcript={mic.interim || heard}
+            reply={replyLine}
+            hint={hint}
+            typing={typing}
+            draft={draft}
+            busy={isSending}
+            onToggleMic={toggleMic}
+            onStartTyping={() => setTyping(true)}
+            onStopTyping={() => { setTyping(false); setDraft(""); }}
+            onDraft={setDraft}
+            onSubmit={submitDraft}
+          />
+        </HudContext.Provider>
+      )}
     </div>
   );
 }

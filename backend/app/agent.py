@@ -23,16 +23,29 @@ class AgentRuntime:
         self.base_url = (os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
                          or "https://api.openai.com/v1")
 
-    def respond(self, message: str, context: str = "", history: list[dict[str, str]] | None = None) -> tuple[str, str]:
+    def respond(
+        self,
+        message: str,
+        context: str = "",
+        history: list[dict[str, str]] | None = None,
+        *,
+        system: str | None = None,
+        json_mode: bool = False,
+        max_tokens: int | None = None,
+        time_budget: float = 28.0,
+    ) -> tuple[str, str]:
+        """Answer a message. `system`, `json_mode` and `max_tokens` let internal tools
+        (such as the research pipeline) ask for structured output from the same providers."""
         history = history or []
+        opts = {"system": system, "json_mode": json_mode, "max_tokens": max_tokens, "time_budget": time_budget}
         if self.gemini_api_key:
             try:
-                return self._gemini_response(message, context, history), "gemini"
+                return self._gemini_response(message, context, history, **opts), "gemini"
             except (OSError, ValueError, KeyError, error.URLError, error.HTTPError) as exc:
                 if self.api_key or self.base_url != "https://api.openai.com/v1":
                     provider = "ollama" if "localhost:11434" in self.base_url else "openai-compatible"
                     try:
-                        return self._compatible_response(message, context, history), provider
+                        return self._compatible_response(message, context, history, **opts), provider
                     except (OSError, ValueError, KeyError, error.URLError, error.HTTPError) as fallback_exc:
                         logger.warning("Secondary AI provider %s also failed: %s", provider, fallback_exc)
                 return self._provider_error("Gemini", exc), "gemini-error"
@@ -40,7 +53,7 @@ class AgentRuntime:
         if self.api_key or self.base_url != "https://api.openai.com/v1":
             provider = "ollama" if "localhost:11434" in self.base_url else "openai-compatible"
             try:
-                return self._compatible_response(message, context, history), provider
+                return self._compatible_response(message, context, history, **opts), provider
             except (OSError, ValueError, KeyError, error.URLError, error.HTTPError) as exc:
                 return self._provider_error(provider, exc), f"{provider}-error"
 
@@ -49,14 +62,24 @@ class AgentRuntime:
             "configuration-required",
         )
 
-    def _gemini_response(self, message: str, context: str, history: list[dict[str, str]] | None = None) -> str:
-        instruction = (
+    def _gemini_response(
+        self,
+        message: str,
+        context: str,
+        history: list[dict[str, str]] | None = None,
+        *,
+        system: str | None = None,
+        json_mode: bool = False,
+        max_tokens: int | None = None,
+        time_budget: float = 28.0,
+    ) -> str:
+        instruction = system or (
             "You are CISCO, a helpful autonomous assistant. Be clear, accurate, and concise. "
             "Use the conversation history to resolve short or ambiguous follow-up questions. "
             "Keep the same topic unless the user clearly changes it; do not invent a new topic for phrases like 'and what would those be?'. "
             "If a graph topic is currently focused, treat it as the current subject even if older chat turns discussed something else."
         )
-        if context:
+        if context and not system:
             instruction += f"\nUse the focused graph topic and research context when relevant:\n{context}"
         contents = [
             {"role": "model" if turn.get("role") == "assistant" else "user", "parts": [{"text": turn["content"]}]}
@@ -67,19 +90,22 @@ class AgentRuntime:
         payload = json.dumps({
             "systemInstruction": {"parts": [{"text": instruction}]},
             "contents": contents,
-            "generationConfig": {"maxOutputTokens": 700},
+            "generationConfig": {
+                "maxOutputTokens": max_tokens or 700,
+                **({"responseMimeType": "application/json"} if json_mode else {}),
+            },
         }).encode("utf-8")
         fallback_models = [model for model in ("gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash") if model != self.gemini_model]
         models = [self.gemini_model, *fallback_models]
         attempted: list[str] = []
-        deadline = time.monotonic() + 28
+        deadline = time.monotonic() + time_budget
         result: dict | None = None
         for index, model in enumerate(models):
             try:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     break
-                result = self._send_gemini_request(model, payload, timeout=min(15, remaining))
+                result = self._send_gemini_request(model, payload, timeout=min(max(15.0, time_budget / 2), remaining))
                 break
             except error.HTTPError as exc:
                 attempted.append(f"{model} (HTTP {exc.code})")
@@ -115,31 +141,42 @@ class AgentRuntime:
         with request.urlopen(req, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
 
-    def _compatible_response(self, message: str, context: str, history: list[dict[str, str]] | None = None) -> str:
-        system = (
+    def _compatible_response(
+        self,
+        message: str,
+        context: str,
+        history: list[dict[str, str]] | None = None,
+        *,
+        system: str | None = None,
+        json_mode: bool = False,
+        max_tokens: int | None = None,
+        time_budget: float = 28.0,
+    ) -> str:
+        system_prompt = system or (
             "You are CISCO, a helpful autonomous assistant. Be clear, accurate, and concise. "
             "Use conversation history to resolve follow-up questions and stay on the current topic unless the user changes it. "
             "If a graph topic is currently focused, treat it as the current subject even if older chat turns discussed something else."
         )
-        if context:
-            system += f"\nUse the focused graph topic and research context when relevant:\n{context}"
-        messages = [{"role": "system", "content": system}]
+        if context and not system:
+            system_prompt += f"\nUse the focused graph topic and research context when relevant:\n{context}"
+        messages = [{"role": "system", "content": system_prompt}]
         messages.extend(
             {"role": turn["role"], "content": turn["content"]}
             for turn in (history or [])[-12:]
             if turn.get("role") in ("user", "assistant") and turn.get("content")
         )
         messages.append({"role": "user", "content": message})
-        payload = json.dumps({
-            "model": self.model,
-            "messages": messages,
-            "temperature": 0.3,
-        }).encode("utf-8")
+        body: dict = {"model": self.model, "messages": messages, "temperature": 0.3}
+        if max_tokens:
+            body["max_tokens"] = max_tokens
+        if json_mode:
+            body["response_format"] = {"type": "json_object"}
+        payload = json.dumps(body).encode("utf-8")
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         req = request.Request(f"{self.base_url}/chat/completions", data=payload, headers=headers, method="POST")
-        with request.urlopen(req, timeout=30) as response:
+        with request.urlopen(req, timeout=max(30.0, time_budget)) as response:
             result = json.loads(response.read().decode("utf-8"))
         answer = result["choices"][0]["message"]["content"]
         if not isinstance(answer, str) or not answer.strip():
