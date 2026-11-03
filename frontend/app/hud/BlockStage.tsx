@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import BlockView from "./BlockView";
-import { GAP, ROWS, columnsFor, rectToStyle } from "./layout";
+import { GAP, ROWS, columnsFor, rectToStyle } from "./grid";
 import type { HudBlock } from "./types";
 
 type Metrics = { cols: number; cellW: number; cellH: number; height: number };

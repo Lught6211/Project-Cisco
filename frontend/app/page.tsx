@@ -17,7 +17,7 @@ import { useVoiceInput } from "./hud/useVoiceInput";
 import { useMedia } from "./hud/useMedia";
 import { useResearch } from "./hud/useResearch";
 import { addHistory, loadHistory, storeHistory } from "./hud/history";
-import { dockRect, fitRows, placeBlock, ROWS, tidyBlocks } from "./hud/layout";
+import { dockRect, fitRows, placeBlock, ROWS, tidyBlocks } from "./hud/grid";
 import { isDemoIntent, isResearchIntent, topicFromPrompt, uiCommand } from "./hud/intents";
 import type { UiCommand } from "./hud/intents";
 import type { BlockContent, HistoryEntry, HudBlock, VoiceState } from "./hud/types";
