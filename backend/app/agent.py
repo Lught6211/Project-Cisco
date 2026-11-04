@@ -11,6 +11,17 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 logger = logging.getLogger("CiscoAgent")
 
+# CISCO talks through a dashboard that hears (microphone -> text), speaks (voice) and can look
+# (camera / screen-share frames attached to the message). Say so, or the model denies all three.
+CAPABILITIES = (
+    "You are the voice of a dashboard. The user talks to you by microphone (their speech arrives to you as text) "
+    "and your reply is spoken aloud, so keep replies short and natural. Never say you cannot hear or speak. "
+    "When the user asks you to look at them, their room, or their screen, the dashboard attaches live frames from their "
+    "camera or screen-share to the message: when an image is attached, look at it and answer from what you actually see, "
+    "and never claim you cannot see. If no image is attached and they ask you to look, tell them to press CAMERA or SCREEN "
+    "on the dashboard (top right) and ask again."
+)
+
 
 class AgentRuntime:
     """Small provider runtime for Gemini, OpenAI-compatible APIs, or local Ollama."""
@@ -33,11 +44,13 @@ class AgentRuntime:
         json_mode: bool = False,
         max_tokens: int | None = None,
         time_budget: float = 28.0,
+        images: list[dict[str, str]] | None = None,
     ) -> tuple[str, str]:
         """Answer a message. `system`, `json_mode` and `max_tokens` let internal tools
-        (such as the research pipeline) ask for structured output from the same providers."""
+        (such as the research pipeline) ask for structured output from the same providers.
+        `images` are live camera or screen frames ({"mime", "data" (base64), "label"}) the model can look at."""
         history = history or []
-        opts = {"system": system, "json_mode": json_mode, "max_tokens": max_tokens, "time_budget": time_budget}
+        opts = {"system": system, "json_mode": json_mode, "max_tokens": max_tokens, "time_budget": time_budget, "images": images or []}
         if self.gemini_api_key:
             try:
                 return self._gemini_response(message, context, history, **opts), "gemini"
@@ -72,12 +85,14 @@ class AgentRuntime:
         json_mode: bool = False,
         max_tokens: int | None = None,
         time_budget: float = 28.0,
+        images: list[dict[str, str]] | None = None,
     ) -> str:
         instruction = system or (
             "You are CISCO, a helpful autonomous assistant. Be clear, accurate, and concise. "
             "Use the conversation history to resolve short or ambiguous follow-up questions. "
             "Keep the same topic unless the user clearly changes it; do not invent a new topic for phrases like 'and what would those be?'. "
-            "If a graph topic is currently focused, treat it as the current subject even if older chat turns discussed something else."
+            "If a graph topic is currently focused, treat it as the current subject even if older chat turns discussed something else. "
+            + CAPABILITIES
         )
         if context and not system:
             instruction += f"\nUse the focused graph topic and research context when relevant:\n{context}"
@@ -86,7 +101,12 @@ class AgentRuntime:
             for turn in (history or [])[-12:]
             if turn.get("role") in ("user", "assistant") and turn.get("content")
         ]
-        contents.append({"role": "user", "parts": [{"text": message}]})
+        parts: list[dict] = [{"text": message}]
+        for image in images or []:
+            if image.get("label"):
+                parts.append({"text": f"[The next image is a live frame from the user's {image['label']}.]"})
+            parts.append({"inlineData": {"mimeType": image.get("mime", "image/jpeg"), "data": image["data"]}})
+        contents.append({"role": "user", "parts": parts})
         payload = json.dumps({
             "systemInstruction": {"parts": [{"text": instruction}]},
             "contents": contents,
@@ -95,6 +115,10 @@ class AgentRuntime:
                 **({"responseMimeType": "application/json"} if json_mode else {}),
             },
         }).encode("utf-8")
+        return self._gemini_generate(payload, time_budget)
+
+    def _gemini_generate(self, payload: bytes, time_budget: float) -> str:
+        """Send one generateContent request, falling back through the supported Gemini models."""
         fallback_models = [model for model in ("gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash") if model != self.gemini_model]
         models = [self.gemini_model, *fallback_models]
         attempted: list[str] = []
@@ -124,11 +148,35 @@ class AgentRuntime:
             raise ValueError("Gemini models exhausted")
         if result is None:
             raise ValueError(f"Gemini fallback models failed: {', '.join(attempted)}. Try again shortly.")
-        parts = result["candidates"][0]["content"]["parts"]
+        candidates = result.get("candidates") or []
+        parts = ((candidates[0].get("content") or {}).get("parts") or []) if candidates else []
         answer = "\n".join(part.get("text", "") for part in parts).strip()
         if not answer:
             raise ValueError("Gemini returned an empty response")
         return answer
+
+    def transcribe(self, audio_b64: str, mime: str = "audio/wav") -> tuple[str, str]:
+        """Speech to text for browsers whose built-in recognition does not work (Opera, Firefox, desktop shells).
+        Returns (text, provider); text is empty when no speech was understood."""
+        if not self.gemini_api_key:
+            return "", "configuration-required"
+        payload = json.dumps({
+            "contents": [{"role": "user", "parts": [
+                {"text": "Transcribe the speech in this audio exactly as spoken, in the language spoken. "
+                         "Reply with only the transcript: no quotes, labels or commentary. "
+                         "If there is no intelligible speech, reply with an empty message."},
+                {"inlineData": {"mimeType": mime, "data": audio_b64}},
+            ]}],
+            "generationConfig": {"maxOutputTokens": 300, "temperature": 0},
+        }).encode("utf-8")
+        try:
+            text = self._gemini_generate(payload, 20.0)
+        except ValueError as exc:
+            # An empty answer means silence or noise, which is not a failure.
+            if "empty response" in str(exc):
+                return "", "gemini"
+            raise
+        return text.strip().strip('"').strip(), "gemini"
 
     def _send_gemini_request(self, model: str, payload: bytes, timeout: float = 15) -> dict:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{parse.quote(model, safe='')}:generateContent"
@@ -151,11 +199,13 @@ class AgentRuntime:
         json_mode: bool = False,
         max_tokens: int | None = None,
         time_budget: float = 28.0,
+        images: list[dict[str, str]] | None = None,
     ) -> str:
         system_prompt = system or (
             "You are CISCO, a helpful autonomous assistant. Be clear, accurate, and concise. "
             "Use conversation history to resolve follow-up questions and stay on the current topic unless the user changes it. "
-            "If a graph topic is currently focused, treat it as the current subject even if older chat turns discussed something else."
+            "If a graph topic is currently focused, treat it as the current subject even if older chat turns discussed something else. "
+            + CAPABILITIES
         )
         if context and not system:
             system_prompt += f"\nUse the focused graph topic and research context when relevant:\n{context}"
@@ -165,7 +215,13 @@ class AgentRuntime:
             for turn in (history or [])[-12:]
             if turn.get("role") in ("user", "assistant") and turn.get("content")
         )
-        messages.append({"role": "user", "content": message})
+        if images:
+            content: list[dict] = [{"type": "text", "text": message}]
+            for image in images:
+                content.append({"type": "image_url", "image_url": {"url": f"data:{image.get('mime', 'image/jpeg')};base64,{image['data']}"}})
+            messages.append({"role": "user", "content": content})
+        else:
+            messages.append({"role": "user", "content": message})
         body: dict = {"model": self.model, "messages": messages, "temperature": 0.3}
         if max_tokens:
             body["max_tokens"] = max_tokens

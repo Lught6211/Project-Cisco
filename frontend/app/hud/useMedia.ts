@@ -27,11 +27,11 @@ export function useMedia() {
     setCamera(null);
   }, []);
 
-  const startCamera = useCallback(async (id?: string) => {
+  const startCamera = useCallback(async (id?: string): Promise<MediaStream | null> => {
     setError("");
     if (!navigator.mediaDevices?.getUserMedia) {
       setError("CAMERA UNAVAILABLE - NEEDS HTTPS OR LOCALHOST");
-      return;
+      return null;
     }
     try {
       cameraRef.current?.getTracks().forEach((track) => track.stop());
@@ -39,11 +39,13 @@ export function useMedia() {
       cameraRef.current = stream;
       setCamera(stream);
       await refreshDevices();
+      return stream;
     } catch (cause) {
       const denied = cause instanceof DOMException && cause.name === "NotAllowedError";
       setError(denied ? "CAMERA BLOCKED - ALLOW ACCESS" : "NO CAMERA FOUND");
       cameraRef.current = null;
       setCamera(null);
+      return null;
     }
   }, [refreshDevices]);
 
@@ -53,19 +55,21 @@ export function useMedia() {
     setScreen(null);
   }, []);
 
-  const startScreen = useCallback(async () => {
+  const startScreen = useCallback(async (): Promise<MediaStream | null> => {
     setError("");
     if (!navigator.mediaDevices?.getDisplayMedia) {
       setError("SCREEN SHARE NOT SUPPORTED HERE");
-      return;
+      return null;
     }
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       stream.getVideoTracks()[0]?.addEventListener("ended", () => { screenRef.current = null; setScreen(null); });
       screenRef.current = stream;
       setScreen(stream);
+      return stream;
     } catch {
       setError("SCREEN SHARE CANCELLED");
+      return null;
     }
   }, []);
 
@@ -82,5 +86,5 @@ export function useMedia() {
     };
   }, [refreshDevices]);
 
-  return { camera, screen, devices, deviceId, error, startCamera: () => startCamera(deviceId || undefined), stopCamera, startScreen, stopScreen, chooseDevice };
+  return { camera, screen, devices, deviceId, error, startCamera: () => startCamera(deviceId || undefined), stopCamera, startScreen, stopScreen, chooseDevice, liveCamera: () => cameraRef.current, liveScreen: () => screenRef.current };
 }

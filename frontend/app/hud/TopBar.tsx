@@ -8,6 +8,7 @@ type Props = {
   screenOn: boolean;
   historyOpen: boolean;
   logOpen: boolean;
+  nudge?: "" | "screen" | "camera";
   serverState: "loading" | "unconfigured" | "online" | "offline";
   devices: CameraDevice[];
   deviceId: string;
@@ -30,13 +31,13 @@ export default function TopBar(props: Props) {
         <button className={`hx-chip${props.historyOpen ? " active" : ""}`} onClick={props.onHistory} aria-pressed={props.historyOpen}>HISTORY</button>
         <button className="hx-chip" onClick={props.onTidy}>TIDY</button>
         <button className="hx-chip" onClick={props.onClear}>CLEAR VIEW</button>
-        <button className={`hx-chip${props.cameraOn ? " active" : ""}`} onClick={props.onCamera} aria-pressed={props.cameraOn}>CAMERA</button>
+        <button className={`hx-chip${props.cameraOn ? " active" : ""}${props.nudge === "camera" ? " nudge" : ""}`} onClick={props.onCamera} aria-pressed={props.cameraOn}>CAMERA</button>
         <label className="hx-chip-caption" htmlFor="hx-camera-source">CAMERA SOURCE</label>
         <select id="hx-camera-source" className="hx-chip hx-select" value={props.deviceId} onChange={(event) => props.onDevice(event.target.value)}>
           <option value="">DEFAULT CAMERA</option>
           {props.devices.map((device) => <option key={device.id} value={device.id}>{device.label.toUpperCase()}</option>)}
         </select>
-        <button className={`hx-chip${props.screenOn ? " active" : ""}`} onClick={props.onScreen} aria-pressed={props.screenOn}>SCREEN</button>
+        <button className={`hx-chip${props.screenOn ? " active" : ""}${props.nudge === "screen" ? " nudge" : ""}`} onClick={props.onScreen} aria-pressed={props.screenOn}>SCREEN</button>
       </div>
       <div className="hx-chip-row second">
         <button className="hx-chip" onClick={props.onMemory}>MEMORY</button>

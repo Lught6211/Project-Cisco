@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import BlockView from "./BlockView";
 import { GAP, ROWS, columnsFor, rectToStyle } from "./grid";
 import type { HudBlock } from "./types";
 
 type Metrics = { cols: number; cellW: number; cellH: number; height: number };
+type Beam = { id: string; x1: number; y1: number; x2: number; y2: number; delay: number };
 
 export default function BlockStage({
   blocks,
@@ -25,6 +26,15 @@ export default function BlockStage({
   const drag = useRef<{ id: string; startX: number; startY: number; element: HTMLElement; moved: boolean } | null>(null);
   const blocksRef = useRef(blocks);
   blocksRef.current = blocks;
+  const innerRef = useRef<HTMLDivElement>(null);
+  const arrivals = useRef(new Map<string, number>());
+  const [beams, setBeams] = useState<Beam[]>([]);
+
+  // Every tile gets a launch delay the first time it is seen, so a batch fires one after another.
+  let fresh = 0;
+  for (const block of blocks) {
+    if (!arrivals.current.has(block.id)) { arrivals.current.set(block.id, Math.min(fresh, 10) * 120); fresh += 1; }
+  }
 
   useLayoutEffect(() => {
     const element = stageRef.current;
@@ -33,7 +43,7 @@ export default function BlockStage({
       const { width, height } = element.getBoundingClientRect();
       const cols = columnsFor(width);
       const cellW = Math.max(40, (width - GAP * (cols - 1)) / cols);
-      const cellH = Math.max(cols < 8 ? 120 : 56, (height - GAP * (ROWS - 1)) / ROWS);
+      const cellH = Math.max(cols < 8 ? 92 : 56, (height - GAP * (ROWS - 1)) / ROWS);
       setMetrics({ cols, cellW, cellH, height });
     };
     measure();
@@ -50,6 +60,51 @@ export default function BlockStage({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [expandedId]);
+
+  // A light beam from the reactor to each tile that has just arrived.
+  const beamed = useRef(new Set<string>());
+  useLayoutEffect(() => {
+    const inner = innerRef.current;
+    const reactor = document.querySelector(".hx-reactor");
+    if (!inner || !reactor) return;
+    const origin = inner.getBoundingClientRect();
+    const rect = reactor.getBoundingClientRect();
+    const x1 = rect.left + rect.width / 2 - origin.left;
+    const y1 = rect.top + rect.height / 2 - origin.top;
+    const added: Beam[] = [];
+    for (const block of blocks) {
+      if (beamed.current.has(block.id)) continue;
+      beamed.current.add(block.id);
+      const box = rectToStyle(block, metrics);
+      added.push({ id: block.id, x1, y1, x2: box.left + box.width / 2, y2: box.top + box.height / 2, delay: arrivals.current.get(block.id) ?? 0 });
+    }
+    if (!added.length) return;
+    setBeams((current) => [...current.filter((beam) => !added.some((next) => next.id === beam.id)), ...added]);
+    const timer = window.setTimeout(() => setBeams((current) => current.filter((beam) => !added.some((next) => next.id === beam.id))), 2600 + Math.max(...added.map((beam) => beam.delay)));
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocks.map((block) => block.id).join("|")]);
+
+  // Tiles drift a few pixels with the pointer, each at its own depth.
+  useEffect(() => {
+    const inner = innerRef.current;
+    if (!inner || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    let frame = 0;
+    let nx = 0;
+    let ny = 0;
+    const apply = () => {
+      frame = 0;
+      inner.style.setProperty("--px", nx.toFixed(3));
+      inner.style.setProperty("--py", ny.toFixed(3));
+    };
+    const onMove = (event: PointerEvent) => {
+      nx = (event.clientX / window.innerWidth) * 2 - 1;
+      ny = (event.clientY / window.innerHeight) * 2 - 1;
+      if (!frame) frame = requestAnimationFrame(apply);
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => { window.removeEventListener("pointermove", onMove); if (frame) cancelAnimationFrame(frame); };
+  }, []);
 
   const raise = useCallback((id: string) => {
     const current = blocksRef.current;
@@ -100,12 +155,26 @@ export default function BlockStage({
 
   return (
     <div className="hx-stage" ref={stageRef}>
-      <div className="hx-stage-inner" style={{ height: contentHeight }}>
-        {blocks.map((block, index) => (
+      <div className="hx-stage-inner" ref={innerRef} style={{ height: contentHeight }}>
+        {beams.length > 0 && (
+          <svg className="hx-beams" width="100%" height={contentHeight} aria-hidden="true">
+            {beams.map((beam) => {
+              const path = `M${beam.x1.toFixed(1)} ${beam.y1.toFixed(1)} L${beam.x2.toFixed(1)} ${beam.y2.toFixed(1)}`;
+              return (
+                <g key={beam.id} style={{ "--d": `${beam.delay}ms` } as CSSProperties}>
+                  <path className="hx-beam trail" d={path} pathLength={1} />
+                  <path className="hx-beam head" d={path} pathLength={1} />
+                  <circle className="hx-beam-spark" cx={beam.x2} cy={beam.y2} r="4" />
+                </g>
+              );
+            })}
+          </svg>
+        )}
+        {blocks.map((block) => (
           <BlockView
             key={block.id}
             block={block}
-            index={index}
+            arrive={arrivals.current.get(block.id) ?? 0}
             style={rectToStyle(block, metrics)}
             onHeaderPointerDown={onHeaderPointerDown}
             onRaise={raise}
@@ -116,7 +185,7 @@ export default function BlockStage({
       </div>
       {expanded && (
         <div className="hx-expanded-scrim" onPointerDown={(event) => { if (event.target === event.currentTarget) setExpandedId(null); }}>
-          <BlockView block={expanded} index={0} expanded style={{}} onClose={() => setExpandedId(null)} onExpand={() => setExpandedId(null)} />
+          <BlockView block={expanded} expanded style={{}} onClose={() => setExpandedId(null)} onExpand={() => setExpandedId(null)} />
         </div>
       )}
     </div>

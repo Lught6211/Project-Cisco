@@ -14,7 +14,7 @@ CiscoAI is a local-first foundation for an autonomous, voice-enabled AI agent wi
 - Topic-scoped chat history keeps explicit `user`/`assistant` turn types, including local Kaizen responses, so the production TypeScript build accepts every chat path.
 - Gemini is the default hosted provider when `GEMINI_API_KEY` is configured. Local Ollama remains available without a paid API key.
 - `backend/app/research.py`: research jobs behind `POST /api/research` and `GET /api/research/{id}` that turn a topic into dashboard blocks (text, chart, figure, image) with sources.
-- `frontend/app/hud/` and `frontend/app/hud.css`: the briefing-wall HUD that is now the default view (below). The memory graph, hologram, homelab panels, Kaizen and Ultron are unchanged and sit behind the **MEMORY** chip.
+- `frontend/app/hud/`, `frontend/app/hud.css` and `frontend/app/memory.css`: the briefing-wall HUD that is now the default view (below), plus the matching memory-view styling. The memory graph, hologram, homelab panels, Kaizen and Ultron sit behind the **MEMORY** chip and share the HUD look.
 
 ## Briefing-wall HUD (default view)
 
@@ -22,14 +22,18 @@ The dashboard opens like a sci-fi assistant console instead of the memory graph:
 
 1. **Boot:** a tumbling 3D gyroscope snaps flat into the CISCO reactor logo. The chip row and the microphone strip fade in.
 2. **Top-right chips:** `HISTORY`, `TIDY`, `CLEAR VIEW`, `CAMERA`, a `CAMERA SOURCE` selector and `SCREEN`. A second row has `MEMORY` (opens the previous memory-graph view, with a `BACK TO HUD` button), `SERVER` (homelab tile) and `LOG` (chat log).
-3. **Bottom-left strip:** a red level meter with `LVL` and `PK` dB readouts, a `MIC` / `MUTE` button and the live transcript. Press `/` (or click the transcript) to type instead.
-4. **Research:** say or type "Hey Cisco, research solid state batteries". A blue `RESEARCH // ACTIVE` card shows a timer, the stage, a segmented progress bar and `BLOCKS` / `SOURCES` counters. The logo docks bottom-right and tiles power on across the wall as the report arrives.
-5. **The wall:** text, chart, figure and image tiles are packed on a grid (photos on the right). Drag a tile by its header, flip text pages with the dots, expand a tile with the corner square, close it with the `x`. `TIDY` re-packs, `CLEAR VIEW` wipes the wall. Camera and screen share open as live tiles. Finished reports are kept in `HISTORY` (browser storage only) and can be reopened.
+3. **Bottom-left strip:** a red level meter with `LVL` and `PK` dB readouts, a `MIC` / `MUTE` button, a state badge (`LISTENING`, `HEARING YOU`, `THINKING`, `SPEAKING`) with a live waveform, and the live transcript. Press `/` (or click the transcript) to type instead.
+4. **Research:** say or type "Hey Cisco, research solid state batteries". A blue `RESEARCH // ACTIVE` card shows a timer, the stage, a segmented progress bar and `BLOCKS` / `SOURCES` counters. The logo docks bottom-right and every tile launches out of it along a light beam, locks on with corner brackets and a scan sweep, then its title types in and its chart bars, photo and numbers animate.
+5. **The wall:** text, chart, figure and image tiles are packed on a grid and stretched to fill the screen (photos on the right). Everything scales with the screen size. Drag a tile by its header, flip text pages with the dots, expand a tile with the corner square, close it with the `x`. `TIDY` re-packs, `CLEAR VIEW` wipes the wall. Camera and screen share open as live tiles. Finished reports are kept in `HISTORY` (browser storage only) and can be reopened.
+6. **Alive background:** a slow perspective tunnel, drifting light motes and a scan band sit behind the wall. Rings spread out of the logo with every word CISCO speaks (blue) or every burst of your voice (pink), the logo wears a ring of voice bars, and the reply caption highlights word by word. Tiles drift slightly with the pointer. `prefers-reduced-motion` turns the motion off.
+7. **Memory view:** the same look with a pink core, outlined chips, condensed headlines and the animated background.
 
 Voice and commands:
 
-- Speech recognition uses the browser's Web Speech API (Chrome or Edge). The wake word is "Hey Cisco", followed by a 25 second window where no wake word is needed. Replies are spoken aloud.
-- Spoken or typed shortcuts: "clear the screen", "tidy up", "open the camera", "share my screen", "open memory", "open history", "open the log", "Hi Ultron" / "Hi Cisco".
+- The microphone listens continuously and stops by itself when you pause (voice-activity detection), then answers. The wake word "Hey Cisco" is optional: the `WAKE` toggle in the strip turns it on if you want it, and it is off by default.
+- Chrome and Edge use the browser's Web Speech recognition. Browsers without a working speech service (Opera, Firefox, desktop wrappers such as Electron) automatically use server transcription instead: the HUD records your phrase and posts it to `POST /api/transcribe`, which uses the Gemini key already configured on the backend. The strip shows `SERVER SPEECH` when that path is active.
+- Vision: ask "can you see me?" and CISCO attaches a frame from the camera (it starts the camera if allowed). Ask "what is on my screen?" and it attaches a frame from your screen share; browsers require a click on `SCREEN` to pick what to share, so CISCO reminds you and pulses the chip. Frames are sent only with that question, are resized to at most 1280 px and are not stored. Needs a Gemini or other image-capable model on the backend.
+- Spoken or typed shortcuts: "clear the screen", "tidy up", "open the camera", "share my screen", "open memory", "open history", "open the log", "Hi Ultron" / "Hi Cisco". Replies are spoken aloud.
 - `http://localhost:3000/?demo` (or saying "run the demo") plays a scripted sample report with no backend, clearly labeled as sample data.
 
 Research API:

@@ -5,8 +5,10 @@ import type { CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import "./scene.css";
 import "./hud.css";
+import "./memory.css";
 import { HomelabConsole, useHomelab } from "./homelab";
 import Reactor from "./hud/Reactor";
+import Ambient from "./hud/Ambient";
 import TopBar from "./hud/TopBar";
 import VoiceStrip from "./hud/VoiceStrip";
 import ResearchCard from "./hud/ResearchCard";
@@ -14,11 +16,14 @@ import BlockStage from "./hud/BlockStage";
 import HistoryPanel from "./hud/HistoryPanel";
 import { HudContext } from "./hud/context";
 import { useVoiceInput } from "./hud/useVoiceInput";
+import { useSpeech } from "./hud/useSpeech";
+import { voiceBus } from "./hud/voiceBus";
+import { captureFrame } from "./hud/frames";
 import { useMedia } from "./hud/useMedia";
 import { useResearch } from "./hud/useResearch";
 import { addHistory, loadHistory, storeHistory } from "./hud/history";
-import { dockRect, fitRows, placeBlock, ROWS, tidyBlocks } from "./hud/grid";
-import { isDemoIntent, isResearchIntent, topicFromPrompt, uiCommand } from "./hud/intents";
+import { dockRect, placeBlock, ROWS, growBlocks, settleBlocks } from "./hud/grid";
+import { isDemoIntent, isResearchIntent, topicFromPrompt, uiCommand, visionIntent } from "./hud/intents";
 import type { UiCommand } from "./hud/intents";
 import type { BlockContent, HistoryEntry, HudBlock, VoiceState } from "./hud/types";
 
@@ -120,8 +125,6 @@ export default function Home() {
   const [captions, setCaptions] = useState<CaptionItem[]>([]);
   const [chatMessages, setChatMessages] = useState<CaptionItem[]>([]);
   const conversationsByTopicRef = useRef(new Map<string, ConversationTurn[]>());
-  const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
-  const voiceChoiceLockedRef = useRef(false);
 
   const [selectedId, setSelectedId] = useState<string>("cisco");
   const [cameraResetToken, setCameraResetToken] = useState(0);
@@ -151,18 +154,39 @@ export default function Home() {
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState("");
   const [heard, setHeard] = useState("");
+  const [nudge, setNudge] = useState<"" | "screen" | "camera">("");
   const [replyLine, setReplyLine] = useState("");
   const colsRef = useRef(12);
   const cardActiveRef = useRef(false);
   const sendRef = useRef<(text: string) => void>(() => undefined);
   const handleMetrics = useCallback((cols: number) => { colsRef.current = cols; }, []);
 
+  const speech = useSpeech();
+  const transcribeAudio = useCallback(async (audio: string) => {
+    const response = await fetch(`${API_URL}/api/transcribe`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio, mime: "audio/wav" }) });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(typeof data?.detail === "string" ? data.detail : `Speech service returned HTTP ${response.status}`);
+    return typeof data?.text === "string" ? data.text : "";
+  }, []);
   const mic = useVoiceInput({
     onUtterance: (text) => { setHeard(text); sendRef.current(text); },
     paused: voiceState === "thinking" || voiceState === "speaking" || isSending,
+    transcribe: transcribeAudio,
   });
   const media = useMedia();
   const displayVoice: VoiceState = voiceState !== "idle" ? voiceState : mic.enabled ? "listening" : "idle";
+  useEffect(() => { voiceBus.mode = displayVoice; if (displayVoice === "idle" || displayVoice === "thinking") voiceBus.level = 0; }, [displayVoice]);
+  // --ui scales every HUD size with the screen: 1 at 1440x820, bigger on large monitors, never below 0.9.
+  useEffect(() => {
+    const apply = () => {
+      const wide = window.innerWidth >= 760;
+      const scale = wide ? Math.max(0.9, Math.min(1.6, Math.min(window.innerWidth / 1440, window.innerHeight / 820))) : 1;
+      document.documentElement.style.setProperty("--ui", scale.toFixed(3));
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, []);
 
   const reservedRects = () => [...dockRect(colsRef.current), ...(cardActiveRef.current && colsRef.current >= 8 ? [{ x: 0, y: Math.max(0, Math.floor(ROWS / 2) - 1), w: 3, h: 2 }] : [])];
   const keepLive = (list: HudBlock[]) => list.filter((block) => block.kind === "camera" || block.kind === "screen");
@@ -171,7 +195,7 @@ export default function Home() {
     const exists = previous.some((block) => block.id === id);
     if (!on) return exists ? previous.filter((block) => block.id !== id) : previous;
     if (exists) return previous;
-    return [...previous, placeBlock(previous, { id, kind, kicker: kind === "camera" ? "LIVE // CAMERA" : "LIVE // SCREEN", title: kind === "camera" ? "CAMERA FEED" : "SCREEN SHARE" }, colsRef.current, reservedRects())];
+    return growBlocks([...previous, placeBlock(previous, { id, kind, kicker: kind === "camera" ? "LIVE // CAMERA" : "LIVE // SCREEN", title: kind === "camera" ? "CAMERA FEED" : "SCREEN SHARE" }, colsRef.current, reservedRects())], colsRef.current, reservedRects());
   };
   useEffect(() => { setHudBlocks((previous) => syncLive(previous, "camera", Boolean(media.camera))); }, [media.camera]);
   useEffect(() => { setHudBlocks((previous) => syncLive(previous, "screen", Boolean(media.screen))); }, [media.screen]);
@@ -197,7 +221,7 @@ export default function Home() {
     onBlocks: (fresh: BlockContent[]) => setHudBlocks((previous) => fresh.reduce((list, content) => [...list, placeBlock(list, content, colsRef.current, reservedRects())], previous)),
     onDone: (result) => {
       // Settle the wall once the research card is gone: re-pack so the space it held is used.
-      setHudBlocks((previous) => fitRows(tidyBlocks(previous, colsRef.current, dockRect(colsRef.current)), colsRef.current, dockRect(colsRef.current)));
+      setHudBlocks((previous) => settleBlocks(previous, colsRef.current, dockRect(colsRef.current)));
       setHistory((previous) => { const next = addHistory(previous, result.title, result.blocks, result.sources); storeHistory(next); return next; });
       const text = result.summary || `Research on ${result.title.toLowerCase()} is complete.`;
       postReply(text);
@@ -221,17 +245,17 @@ export default function Home() {
     media.stopCamera();
     media.stopScreen();
   };
-  const tidyView = () => setHudBlocks((previous) => fitRows(tidyBlocks(previous, colsRef.current, dockRect(colsRef.current)), colsRef.current, dockRect(colsRef.current)));
+  const tidyView = () => setHudBlocks((previous) => settleBlocks(previous, colsRef.current, dockRect(colsRef.current)));
   const toggleCamera = (want?: boolean) => { if (want === undefined ? media.camera : !want) media.stopCamera(); else void media.startCamera(); };
   const toggleScreen = (want?: boolean) => { if (want === undefined ? media.screen : !want) media.stopScreen(); else void media.startScreen(); };
   const closeBlock = (id: string) => {
     if (id === "live-camera") media.stopCamera();
     else if (id === "live-screen") media.stopScreen();
-    else setHudBlocks((previous) => previous.filter((block) => block.id !== id));
+    else setHudBlocks((previous) => growBlocks(previous.filter((block) => block.id !== id), colsRef.current, reservedRects()));
   };
   const openHistoryEntry = (entry: HistoryEntry) => {
     research.cancel();
-    setHudBlocks((previous) => fitRows(entry.blocks.reduce((list, content) => [...list, placeBlock(list, content, colsRef.current, dockRect(colsRef.current))], keepLive(previous)), colsRef.current, dockRect(colsRef.current)));
+    setHudBlocks((previous) => settleBlocks(entry.blocks.reduce((list, content) => [...list, placeBlock(list, content, colsRef.current, dockRect(colsRef.current))], keepLive(previous)), colsRef.current, dockRect(colsRef.current)));
     setHistoryOpen(false);
   };
   const runUiCommand = (command: UiCommand): string => {
@@ -583,61 +607,8 @@ export default function Home() {
   const toggleMic = () => { mic.toggle(); };
 
   const speakReply = (text: string) => {
-    if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
-      setVoiceState("idle");
-      return;
-    }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = navigator.language || "en-US";
-    const femaleVoiceNames = ["samantha", "zira", "aria", "jenny", "michelle", "susan", "karen", "victoria", "hazel", "sonia", "libby", "natasha", "ava", "allison", "joanna", "kendra", "kimberly", "salli", "ivy", "google uk english female", "google us english"];
-    const chooseVoice = () => {
-      const voices = window.speechSynthesis.getVoices();
-      if (!voices.length) return;
-      const language = utterance.lang.toLowerCase();
-      const sameLanguage = voices.filter((voice) => voice.lang.toLowerCase() === language);
-      const englishVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith("en"));
-      const candidates = sameLanguage.length ? sameLanguage : englishVoices;
-      if (!voiceChoiceLockedRef.current) {
-        for (const knownName of femaleVoiceNames) {
-          const match = candidates.find((voice) => voice.name.toLowerCase().includes(knownName));
-          if (match) {
-            preferredVoiceRef.current = match;
-            break;
-          }
-        }
-        preferredVoiceRef.current ??= candidates[0] ?? voices[0];
-        voiceChoiceLockedRef.current = true;
-      }
-      if (preferredVoiceRef.current) utterance.voice = preferredVoiceRef.current;
-    };
-    const finishSpeaking = () => {
-      setVoiceState("idle");
-    };
-    utterance.volume = 1;
-    utterance.onstart = () => setVoiceState("speaking");
-    utterance.onend = finishSpeaking;
-    utterance.onerror = finishSpeaking;
     setVoiceState("thinking");
-    let speechQueued = false;
-    let voiceWaitTimer: number | undefined;
-    const queueSpeech = () => {
-      if (speechQueued) return;
-      speechQueued = true;
-      window.speechSynthesis.removeEventListener("voiceschanged", queueSpeech);
-      if (voiceWaitTimer !== undefined) window.clearTimeout(voiceWaitTimer);
-      chooseVoice();
-      // Keep one chosen voice for the whole page session. If the browser never
-      // supplies its voice list, consistently use its built-in default.
-      if (!window.speechSynthesis.getVoices().length) voiceChoiceLockedRef.current = true;
-      setVoiceState("speaking");
-      window.speechSynthesis.speak(utterance);
-    };
-    if (window.speechSynthesis.getVoices().length) queueSpeech();
-    else {
-      window.speechSynthesis.addEventListener("voiceschanged", queueSpeech);
-      voiceWaitTimer = window.setTimeout(queueSpeech, 900);
-    }
+    speech.speak(text, { onStart: () => setVoiceState("speaking"), onEnd: () => setVoiceState("idle") });
   };
 
   const raisePanel = (panel: "chat" | "telemetry" | "focus") => {
@@ -884,11 +855,39 @@ export default function Home() {
     setIsSending(true);
     setVoiceState("thinking");
 
+    // "Can you see my screen?" -> attach live frames from the camera or shared screen so the model really looks.
+    const images: Array<{ mime: string; data: string; label: "camera" | "screen" }> = [];
+    const vision = ultronMode ? null : visionIntent(prompt);
+    const feedsOn = Boolean(media.liveCamera() || media.liveScreen());
+    if (vision && !(vision.weak && !feedsOn)) {
+      const wantScreen = vision.screen || ((vision.generic || vision.weak) && Boolean(media.liveScreen()));
+      const wantCamera = vision.camera || ((vision.generic || vision.weak) && Boolean(media.liveCamera())) || (vision.generic && !feedsOn);
+      const bail = (text: string, chip: "screen" | "camera") => {
+        postReply(text);
+        speakReply(text);
+        setIsSending(false);
+        setNudge(chip);
+        window.setTimeout(() => setNudge(""), 6000);
+      };
+      const screenStream = media.liveScreen();
+      if (wantScreen && !screenStream) { bail("I can't see your screen yet. Press SCREEN at the top right, pick what to share, then ask me again.", "screen"); return; }
+      if (wantScreen && screenStream) {
+        const frame = await captureFrame(screenStream);
+        if (frame) images.push({ ...frame, label: "screen" });
+      }
+      if (wantCamera) {
+        const stream = media.liveCamera() ?? await media.startCamera();
+        const frame = stream ? await captureFrame(stream) : null;
+        if (frame) images.push({ ...frame, label: "camera" });
+      }
+      if (!images.length) { bail("I couldn't get a picture. Check that the camera or screen share is allowed and not used by another app.", wantCamera ? "camera" : "screen"); return; }
+    }
+
     try {
       const res = await fetch(`${API_URL}/api/agent/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: prompt, use_web: true, history: recentHistory, focus_node_id: focusedId }),
+        body: JSON.stringify({ message: prompt, use_web: images.length === 0, history: recentHistory, focus_node_id: focusedId, images }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.detail || `Backend returned HTTP ${res.status}`);
@@ -958,8 +957,11 @@ export default function Home() {
 
   const hint = mic.error
     || (!mic.enabled ? "Click MIC to talk, or press / to type"
-      : !mic.recognitionSupported ? "Voice commands need Chrome or Edge. Press / to type"
-        : mic.awake ? "Listening..." : "Say \"Hey Cisco...\"");
+      : voiceState === "thinking" || isSending ? "Thinking..."
+        : voiceState === "speaking" ? ""
+          : mic.phase === "hearing" ? "Hearing you..."
+            : mic.phase === "transcribing" ? "Got it..."
+              : mic.requireWake && !mic.awake ? "Say \"Hey Cisco...\"" : "Listening - just talk");
   const hudContext = useMemo(() => ({
     streams: { camera: media.camera, screen: media.screen },
     homelab: homelab.snapshot,
@@ -967,7 +969,7 @@ export default function Home() {
   }), [media.camera, media.screen, homelab.snapshot, homelab.linkState]);
 
   return (
-    <div className={`cisco-container${memoryMode ? "" : " hud-mode"}${ultronMode ? " ultron-mode" : ""}${corruption > 0.005 ? " corruption-active" : ""}${corruption > 0.18 ? " ultron-glitch-active" : ""}${performanceMode ? " performance-mode" : ""}`} style={{ "--ultron-corruption": `${corruption * 100}%` } as CSSProperties & { "--ultron-corruption": string }}>
+    <div data-voice={displayVoice} className={`cisco-container${memoryMode ? " memory-mode" : " hud-mode"}${ultronMode ? " ultron-mode" : ""}${corruption > 0.005 ? " corruption-active" : ""}${corruption > 0.18 ? " ultron-glitch-active" : ""}${performanceMode ? " performance-mode" : ""}`} style={{ "--ultron-corruption": `${corruption * 100}%` } as CSSProperties & { "--ultron-corruption": string }}>
       {/* Interactive 2D memory field (MEMORY mode), with a 3D Canvas reserved for holograms. */}
       {memoryMode ? (
         <div className="canvas-layer">
@@ -984,6 +986,7 @@ export default function Home() {
           />
         </div>
       ) : <div className="hx-backdrop" aria-hidden="true" />}
+      <Ambient tone={memoryMode ? "memory" : "hud"} ultron={identityOverridden} eco={performanceMode} />
       {corruptionCodes.length > 0 && (
         <div className="corruption-code-layer" aria-hidden="true">
           {corruptionCodes.map((fragment) => <div key={fragment.id} className="corruption-code" style={{ left: `${fragment.left}%`, top: `${fragment.top}%` }}>{fragment.value}</div>)}
@@ -1038,11 +1041,13 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="orbital-badge"><i /> POINT LATTICE <span>LIVE</span></div>
-      <button className="memory-search-trigger" onClick={() => setNavigatorOpen(true)} aria-label="Search and focus a memory topic">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="10.8" cy="10.8" r="6.8" /><line x1="16" y1="16" x2="21" y2="21" /></svg>
-        <span>FIND TOPIC</span><kbd>CTRL K</kbd>
-      </button>
+      <div className="mem-tools">
+        <button className="memory-search-trigger" onClick={() => setNavigatorOpen(true)} aria-label="Search and focus a memory topic">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="10.8" cy="10.8" r="6.8" /><line x1="16" y1="16" x2="21" y2="21" /></svg>
+          <span>FIND TOPIC</span><kbd>CTRL K</kbd>
+        </button>
+        <div className="orbital-badge"><i /> POINT LATTICE <span>LIVE</span></div>
+      </div>
       <div className="graph-filter-strip" role="toolbar" aria-label="Filter memory field">
         <span className="graph-filter-caption">FIELD FILTER</span>
         <div className="graph-filter-list">
@@ -1393,6 +1398,7 @@ export default function Home() {
             screenOn={Boolean(media.screen)}
             historyOpen={historyOpen}
             logOpen={openPanels.chat}
+            nudge={nudge}
             serverState={homelab.linkState}
             devices={media.devices}
             deviceId={media.deviceId}
@@ -1410,10 +1416,15 @@ export default function Home() {
           <VoiceStrip
             visible={stripOn}
             micOn={mic.enabled}
-            awake={mic.awake}
+            phase={mic.phase}
+            voice={displayVoice}
+            engine={mic.engine}
+            requireWake={mic.requireWake}
+            onToggleWake={() => mic.setRequireWake(!mic.requireWake)}
             meter={mic.meter}
             transcript={mic.interim || heard}
             reply={replyLine}
+            spoken={speech.progress}
             hint={hint}
             typing={typing}
             draft={draft}

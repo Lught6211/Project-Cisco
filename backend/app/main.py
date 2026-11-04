@@ -6,6 +6,7 @@ import hmac
 import os
 from pathlib import Path
 import json
+import logging
 import re
 import secrets
 from typing import Literal
@@ -21,6 +22,7 @@ from .agent import AgentRuntime
 from .realtime import RealtimeBridge, provider_audio_loop
 from .web import SearchResult, search_web
 
+logger = logging.getLogger("CiscoAPI")
 DATA_PATH = Path(__file__).parent.parent / "data" / "memory.json"
 JUST_NOW = "just now"
 
@@ -62,11 +64,24 @@ class ConversationTurn(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
 
 
+class ImageAttachment(BaseModel):
+    """A live frame from the user's camera or screen-share, sent as base64 (no data: prefix)."""
+    mime: Literal["image/jpeg", "image/png", "image/webp"] = "image/jpeg"
+    data: str = Field(min_length=100, max_length=2_500_000)
+    label: Literal["camera", "screen", ""] = ""
+
+
 class AgentMessage(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     use_web: bool = False
     history: list[ConversationTurn] = Field(default_factory=list, max_length=12)
     focus_node_id: str | None = None
+    images: list[ImageAttachment] = Field(default_factory=list, max_length=3)
+
+
+class TranscribeRequest(BaseModel):
+    audio: str = Field(min_length=100, max_length=8_000_000)
+    mime: Literal["audio/wav", "audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg"] = "audio/wav"
 
 
 class AgentAnswer(BaseModel):
@@ -487,6 +502,21 @@ def get_research(job_id: str) -> research.ResearchJob:
     return job
 
 
+@app.post("/api/transcribe")
+async def transcribe_speech(payload: TranscribeRequest) -> dict[str, str]:
+    """Speech to text for browsers without working built-in recognition. The audio is sent to the AI provider and not stored."""
+    try:
+        text, provider = await asyncio.wait_for(asyncio.to_thread(agent.transcribe, payload.audio, payload.mime), timeout=25.0)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Speech transcription timed out.")
+    except Exception as exc:
+        logger.warning("Transcription failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Speech transcription failed. Check the backend AI configuration.")
+    if provider == "configuration-required":
+        raise HTTPException(status_code=503, detail="Speech transcription needs GEMINI_API_KEY on the backend.")
+    return {"text": text, "provider": provider}
+
+
 @app.post("/api/agent/ask")
 async def ask_agent(payload: AgentMessage) -> AgentAnswer:
     focused_node = next((node for node in state.nodes if node.id == payload.focus_node_id), None)
@@ -510,8 +540,9 @@ async def ask_agent(payload: AgentMessage) -> AgentAnswer:
     
     try:
         # Keep the event loop responsive while allowing for model and free-host cold-start latency.
+        images = [{"mime": image.mime, "data": image.data, "label": image.label} for image in payload.images]
         answer, provider = await asyncio.wait_for(
-            asyncio.to_thread(agent.respond, payload.message, context, history), timeout=32.0
+            asyncio.to_thread(agent.respond, payload.message, context, history, images=images), timeout=40.0 if images else 32.0
         )
     except asyncio.TimeoutError:
         answer = "CISCO's AI service took too long to respond. Please try again."

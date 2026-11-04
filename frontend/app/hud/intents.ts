@@ -45,3 +45,32 @@ export function uiCommand(prompt: string): UiCommand | null {
   if (/^(?:open|show)(?: the)? (?:log|chat|conversation)$/.test(text)) return "log";
   return null;
 }
+
+export type VisionRequest = {
+  camera: boolean;
+  screen: boolean;
+  /** "what do you see" with no source named: use whatever is live, or open the camera. */
+  generic: boolean;
+  /** "what is this" style questions: only treated as vision when a camera or screen feed is already on. */
+  weak: boolean;
+};
+
+const SEE = /\b(see|looking at|look at|watch|watching|view|check|read|describe|identify|recogni[sz]e|show)\b/i;
+const SCREEN = /\b(screen|display|monitor|desktop)\b/i;
+const CAMERA_DIRECT = /\b(see me|look at me|watch me|view me|check me out|how do i look|what am i (?:holding|wearing|doing)|what i(?:'m| am) (?:holding|wearing|doing)|in front of you)\b/i;
+const CAMERA_PART = /\bmy (?:face|room|hand|hands|desk|outfit|shirt|hair|background|setup)\b/i;
+const CAMERA_WORD = /\b(camera|webcam)\b/i;
+const GENERIC = /\b(what do you see|what can you see|can you see|do you see|look at (?:this|that|me)|take a look|have a look)\b/i;
+const WEAK = /\b(what(?:'s| is) (?:this|that)|what am i (?:holding|wearing|doing)|how do i look)\b/i;
+
+/** Does this request need CISCO to look at the camera or the shared screen? */
+export function visionIntent(prompt: string): VisionRequest | null {
+  const text = prompt.trim();
+  if (!text || text.length > 200) return null;
+  const generic = GENERIC.test(text);
+  const weak = WEAK.test(text);
+  const screen = SCREEN.test(text) && (SEE.test(text) || /\bwhat(?:'s| is)\b/i.test(text));
+  const camera = CAMERA_DIRECT.test(text) || ((CAMERA_PART.test(text) || CAMERA_WORD.test(text)) && SEE.test(text));
+  if (!screen && !camera && !generic && !weak) return null;
+  return { camera, screen, generic: generic && !screen && !camera, weak: weak && !screen && !camera && !generic };
+}

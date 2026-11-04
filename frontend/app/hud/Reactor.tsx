@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { CSSProperties } from "react";
 import type { VoiceState } from "./types";
+import { voiceBus } from "./voiceBus";
+
+const BARS = 96;
+const BAR_R = 196;
 
 type Pose = { yaw: number; roll: number; pitch: number; spread: number };
 
@@ -39,6 +43,8 @@ export default function Reactor({
   onActivate?: () => void;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const barsRef = useRef<SVGGElement>(null);
   const poseRef = useRef<Pose & { t: number }>({ ...GYRO_POSE(0), t: 0 });
   const phaseRef = useRef(phase);
 
@@ -101,6 +107,45 @@ export default function Reactor({
     return () => cancelAnimationFrame(raf);
   }, [phase]);
 
+  // Voice reactivity: while you talk (listening) or CISCO talks (speaking), a ring of bars and the glow follow the
+  // voice level. Everything is written straight to the DOM from the animation loop, so nothing re-renders.
+  useEffect(() => {
+    const root = rootRef.current;
+    const group = barsRef.current;
+    if (!root || !group) return;
+    const lines = Array.from(group.querySelectorAll("line"));
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const active = voice === "speaking" || voice === "listening";
+    let raf = 0;
+    let smooth = 0;
+    let lastBeat = voiceBus.beat;
+    const loop = (now: number) => {
+      const target = active ? voiceBus.level : 0;
+      smooth += (target - smooth) * 0.3;
+      const t = now / 1000;
+      const speed = voice === "speaking" ? 9 : 5;
+      for (let index = 0; index < lines.length; index += 1) {
+        const band = 0.5 + 0.5 * Math.sin(t * speed + index * 0.83) * Math.sin(t * 2.1 + index * 0.31 + 1.7);
+        const length = 1.2 + smooth * (6 + band * 40);
+        lines[index].setAttribute("y2", String(-(BAR_R + length)));
+      }
+      document.documentElement.style.setProperty("--vl", smooth.toFixed(3));
+      if (voiceBus.beat !== lastBeat) {
+        lastBeat = voiceBus.beat;
+        root.classList.remove("beat");
+        void root.offsetWidth;
+        root.classList.add("beat");
+      }
+      if (!reduce && (active || smooth > 0.012)) raf = requestAnimationFrame(loop);
+      else if (!active) {
+        for (const line of lines) line.setAttribute("y2", String(-BAR_R - 1.2));
+        document.documentElement.style.setProperty("--vl", "0");
+      }
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [voice]);
+
   const rings: Array<{ z: number; className: string; children: React.ReactNode }> = [
     {
       z: 0,
@@ -152,6 +197,7 @@ export default function Reactor({
 
   return (
     <div
+      ref={rootRef}
       className={`hx-reactor${docked ? " docked" : ""}${ultron ? " ultron" : ""}`}
       data-phase={phase}
       data-voice={voice}
@@ -243,6 +289,15 @@ export default function Reactor({
               {splatter.map((dot) => <circle key={dot.key} cx={dot.x} cy={dot.y} r={dot.r} opacity={dot.o} />)}
             </g>
             <path d="M -86 -16 L -60 -22 M 62 30 L 90 24" stroke="#fff" strokeWidth="1.6" opacity=".7" fill="none" />
+          </g>
+
+          <g className="rx-voice" ref={barsRef} aria-hidden="true">
+            <circle r="190" className="rx-ripple" />
+            <circle r="190" className="rx-ripple" />
+            <circle r="190" className="rx-ripple" />
+            {Array.from({ length: BARS }, (_, index) => (
+              <line key={index} x1="0" y1={-BAR_R} x2="0" y2={-BAR_R - 1.2} transform={`rotate(${((index / BARS) * 360).toFixed(2)})`} />
+            ))}
           </g>
 
           <text x="0" y="205" textAnchor="middle" className="rx-micro">SYS 0001 // CORE {voice === "idle" ? "ONLINE" : voice.toUpperCase()}</text>

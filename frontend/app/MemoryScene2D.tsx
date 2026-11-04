@@ -19,15 +19,15 @@ type MemoryEdge = { source: string; target: string; label?: string };
 type Point = { x: number; y: number };
 
 const colorByKind: Record<string, string> = {
-  agent: "#ff69b4",
-  person: "#e4d77c",
-  place: "#c4a6ff",
-  task: "#ffc47a",
-  memory: "#85d5c7",
-  server: "#f0a5ff",
-  service: "#76e1d5",
-  site: "#84c9ff",
-  download: "#ffc47a",
+  agent: "#ff2f6d",
+  person: "#ffd27a",
+  place: "#c9a7ff",
+  task: "#ffb86b",
+  memory: "#59c6ff",
+  server: "#ff9be0",
+  service: "#5dffb0",
+  site: "#8fd6ff",
+  download: "#ffb86b",
 };
 
 export default function MemoryScene2D({

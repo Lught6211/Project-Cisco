@@ -8,8 +8,8 @@ type Size = { w: number; h: number };
 
 /** Tile sizes (in grid cells) for each screen width tier. Photos and video take half the wall, on the right. */
 const SIZES: Record<12 | 8 | 4, Record<BlockKind, Size>> = {
-  12: { text: { w: 3, h: 3 }, chart: { w: 3, h: 3 }, figure: { w: 3, h: 2 }, image: { w: 6, h: 3 }, video: { w: 6, h: 4 }, camera: { w: 3, h: 3 }, screen: { w: 6, h: 4 }, server: { w: 4, h: 4 } },
-  8: { text: { w: 4, h: 3 }, chart: { w: 4, h: 3 }, figure: { w: 4, h: 2 }, image: { w: 4, h: 3 }, video: { w: 8, h: 4 }, camera: { w: 4, h: 3 }, screen: { w: 8, h: 4 }, server: { w: 4, h: 4 } },
+  12: { text: { w: 4, h: 3 }, chart: { w: 4, h: 3 }, figure: { w: 4, h: 3 }, image: { w: 6, h: 3 }, video: { w: 6, h: 4 }, camera: { w: 4, h: 3 }, screen: { w: 6, h: 4 }, server: { w: 4, h: 4 } },
+  8: { text: { w: 4, h: 3 }, chart: { w: 4, h: 3 }, figure: { w: 4, h: 3 }, image: { w: 4, h: 3 }, video: { w: 8, h: 4 }, camera: { w: 4, h: 3 }, screen: { w: 8, h: 4 }, server: { w: 4, h: 4 } },
   4: { text: { w: 4, h: 3 }, chart: { w: 4, h: 3 }, figure: { w: 4, h: 2 }, image: { w: 4, h: 3 }, video: { w: 4, h: 3 }, camera: { w: 4, h: 3 }, screen: { w: 4, h: 3 }, server: { w: 4, h: 4 } },
 };
 
@@ -28,7 +28,7 @@ function sizeFor(content: BlockContent, cols: number, imageIndex: number, shrink
   const tier = cols >= 12 ? 12 : cols >= 8 ? 8 : 4;
   const base = { ...SIZES[tier][content.kind] };
   // After the first two big photos, extra photos become smaller tiles so the wall stays dense.
-  if (content.kind === "image" && imageIndex >= 2 && tier === 12) { base.w = 3; base.h = 2; }
+  if (content.kind === "image" && imageIndex >= 2 && tier === 12) { base.w = 4; base.h = 3; }
   if (shrink && base.h > 2 && content.kind !== "server") base.h = Math.max(2, base.h - shrink);
   return base;
 }
@@ -105,4 +105,59 @@ export function rectToStyle(block: Rect, metrics: { cellW: number; cellH: number
     width: block.w * metrics.cellW + (block.w - 1) * GAP,
     height: block.h * metrics.cellH + (block.h - 1) * GAP,
   };
+}
+
+/** How wide a tile may look (pixel aspect, width / height) and the most cells it may take, per kind. */
+const LOOK: Record<BlockKind, { target: number; max: number; cells: number }> = {
+  text: { target: 1.45, max: 2.2, cells: 30 },
+  chart: { target: 1.5, max: 2.4, cells: 30 },
+  figure: { target: 1.8, max: 2.8, cells: 16 },
+  image: { target: 1.8, max: 2.6, cells: 45 },
+  video: { target: 1.78, max: 2.4, cells: 60 },
+  camera: { target: 1.4, max: 1.9, cells: 36 },
+  screen: { target: 1.78, max: 2.4, cells: 60 },
+  server: { target: 1.5, max: 2.0, cells: 30 },
+};
+const CELL_ASPECT = 1.35; // a grid cell is a little wider than tall on a 16:10 screen
+
+/**
+ * Let every tile stretch into free neighbouring cells, smallest first, so the wall fills the screen instead of
+ * leaving holes. Tiles never move and never overlap the reserved logo corner. Wide screens only.
+ */
+export function growBlocks(blocks: HudBlock[], cols: number, reserved: Rect[] = [], relax = 1): HudBlock[] {
+  if (cols < 8 || !blocks.length) return blocks;
+  const list = blocks.map((block) => ({ ...block }));
+  const blocked = (self: HudBlock, rect: Rect) => rect.y < 0 || rect.y + rect.h > ROWS || !fits(rect, [...reserved, ...list.filter((other) => other !== self)], cols);
+  let changed = true;
+  for (let guard = 0; changed && guard < 120; guard += 1) {
+    changed = false;
+    for (const block of [...list].sort((a, b) => a.w * a.h - b.w * b.h)) {
+      if (block.y + block.h > ROWS) continue; // already hanging below the screen; leave it
+      const look = { target: LOOK[block.kind].target, max: LOOK[block.kind].max * relax, cells: Math.round(LOOK[block.kind].cells * relax) };
+      let best: Rect | null = null;
+      let bestScore = Infinity;
+      const options: Rect[] = [
+        { x: block.x, y: block.y, w: block.w + 1, h: block.h },
+        { x: block.x - 1, y: block.y, w: block.w + 1, h: block.h },
+        { x: block.x, y: block.y, w: block.w, h: block.h + 1 },
+        { x: block.x, y: block.y - 1, w: block.w, h: block.h + 1 },
+      ];
+      for (const next of options) {
+        if (next.w * next.h > look.cells || blocked(block, next)) continue;
+        const aspect = (next.w * CELL_ASPECT) / next.h;
+        if (aspect > look.max || aspect < 0.75) continue;
+        const score = Math.abs(Math.log(aspect / look.target));
+        if (score < bestScore) { best = next; bestScore = score; }
+      }
+      if (best) { Object.assign(block, best); changed = true; }
+    }
+  }
+  return list;
+}
+
+/** Re-pack everything and then stretch tiles to fill the wall. Used when a report finishes and by TIDY. */
+export function settleBlocks(blocks: HudBlock[], cols: number, reserved: Rect[] = []): HudBlock[] {
+  const packed = fitRows(tidyBlocks(blocks, cols, reserved), cols, reserved);
+  // First stretch gently, then let tiles go wider/larger to close any holes that are left.
+  return growBlocks(growBlocks(packed, cols, reserved), cols, reserved, 1.35);
 }
